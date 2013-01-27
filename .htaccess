@@ -1,0 +1,5 @@
+Options ExecCGI
+AddHandler cgi-script .cgi
+AddType application/x-httpd-cgi .cgi
+AddType text/css .css
+DirectoryIndex wiki.cgi
