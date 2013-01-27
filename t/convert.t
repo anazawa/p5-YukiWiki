@@ -2,8 +2,7 @@ use strict;
 use warnings;
 use Test::More tests => 1;
 use Test::Differences;
-
-require './wiki.cgi';
+use YukiWiki;
 
 my $expected = <<'END_EXPECTED';
 <h2></h2>
@@ -176,4 +175,4 @@ LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0
 >>>LEVEL3
 END_INPUT
 
-eq_or_diff text_to_html( $input, toc => 1 ), $expected;
+eq_or_diff YukiWiki::text_to_html( $input, toc => 1 ), $expected;
