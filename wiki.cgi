@@ -20,8 +20,7 @@ use YukiWiki::RSS;
 use YukiWiki::DiffText qw(difftext);
 use YukiWiki::YukiWikiDB;
 use YukiWiki::PluginManager;
-require 'jcode.pl';
-# use Jcode;
+use Jcode;
 use Fcntl;
 # Check if the server can use 'AnyDBM_File' or not.
 # eval 'use AnyDBM_File';
@@ -163,10 +162,6 @@ my %command_do = (
     rss => \&do_rss,
     diff => \&do_diff,
 );
-##############################
-#&main;
-#exit(0);
-##############################
 
 sub main {
     &init_resource;
@@ -1210,8 +1205,7 @@ EOD
 
 sub code_convert {
     my ($contentref, $kanjicode) = @_;
-#   &Jcode::convert($contentref, $kanjicode);       # for Jcode.pm
-    &jcode::convert($contentref, $kanjicode);       # for jcode.pl
+    &Jcode::convert($contentref, $kanjicode);
     return $$contentref;
 }
 
