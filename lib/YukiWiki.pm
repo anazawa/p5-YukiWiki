@@ -145,45 +145,13 @@ my %page_command = (
     $AdminChangePassword => 'adminchangepasswordform',
     $FrontPage => 'FrontPage',
 );
-my %command_do = (
-    read => \&do_read,
-    edit => \&do_edit,
-    adminedit => \&do_adminedit,
-    adminchangepasswordform => \&do_adminchangepasswordform,
-    adminchangepassword => \&do_adminchangepassword,
-    write => \&do_write,
-    index => \&do_index,
-    searchform => \&do_searchform,
-    search => \&do_search,
-    create => \&do_create,
-    createresult => \&do_createresult,
-    FrontPage => \&do_FrontPage,
-    comment => \&do_comment,
-    rss => \&do_rss,
-    diff => \&do_diff,
-);
-
-sub main {
-    &init_resource;
-    # &check_modifiers;
-    &open_db;
-    &init_form;
-    &init_InterWikiName;
-    &init_plugin;
-    if ($command_do{$form{mycmd}}) {
-        &{$command_do{$form{mycmd}}};
-    } else {
-        &do_FrontPage;
-    }
-    &close_db;
-}
 
 sub setup {
     my $self = shift;
 
     &init_resource;
     # &check_modifiers;
-    &open_db;
+    $self->open_db;
     &init_form;
     &init_InterWikiName;
     &init_plugin;
@@ -217,7 +185,7 @@ sub setup {
 
 sub teardown {
     my $self = shift;
-    &close_db;
+    $self->close_db;
 }
 
 sub do_read {
@@ -875,6 +843,7 @@ EOD
 }
 
 sub open_db {
+    my $self = shift;
     if ($modifier_dbtype eq 'dbmopen') {
         dbmopen(%database, $dataname, 0666) or &print_error("(dbmopen) $dataname");
         dbmopen(%infobase, $infoname, 0666) or &print_error("(dbmopen) $infoname");
@@ -890,6 +859,7 @@ sub open_db {
 }
 
 sub close_db {
+    my $self = shift;
     if ($modifier_dbtype eq 'dbmopen') {
         dbmclose(%database);
         dbmclose(%infobase);
