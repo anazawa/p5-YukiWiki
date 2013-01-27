@@ -1,4 +1,4 @@
-package Yuki::DiffText;
+package YukiWiki::DiffText;
 use strict;
 use Algorithm::Diff qw(traverse_sequences);
 use vars qw($VERSION @EXPORT_OK @ISA);

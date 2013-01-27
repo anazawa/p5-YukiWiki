@@ -13,13 +13,13 @@
 ##############################
 # Libraries.
 use strict;
-use lib qw(.);
+use lib qw(lib);
 use CGI qw(:standard);
 use CGI::Carp qw(fatalsToBrowser);
-use Yuki::RSS;
-use Yuki::DiffText qw(difftext);
-use Yuki::YukiWikiDB;
-use Yuki::PluginManager;
+use YukiWiki::RSS;
+use YukiWiki::DiffText qw(difftext);
+use YukiWiki::YukiWikiDB;
+use YukiWiki::PluginManager;
 require 'jcode.pl';
 # use Jcode;
 use Fcntl;
@@ -825,8 +825,10 @@ sub open_db {
         tie(%database, "AnyDBM_File", $dataname, O_RDWR|O_CREAT, 0666) or &print_error("(tie AnyDBM_File) $dataname");
         tie(%infobase, "AnyDBM_File", $infoname, O_RDWR|O_CREAT, 0666) or &print_error("(tie AnyDBM_File) $infoname");
     } else {
-        tie(%database, "Yuki::YukiWikiDB", $dataname) or &print_error("(tie Yuki::YukiWikiDB) $dataname");
-        tie(%infobase, "Yuki::YukiWikiDB", $infoname) or &print_error("(tie Yuki::YukiWikiDB) $infoname");
+        tie(%database, "YukiWiki::YukiWikiDB", $dataname) or
+        &print_error("(tie YukiWiki::YukiWikiDB) $dataname");
+        tie(%infobase, "YukiWiki::YukiWikiDB", $infoname) or
+        &print_error("(tie YukiWiki::YukiWikiDB) $infoname");
     }
 }
 
@@ -849,7 +851,8 @@ sub open_diff {
     } elsif ($modifier_dbtype eq 'AnyDBM_File') {
         tie(%diffbase, "AnyDBM_File", $diffname, O_RDWR|O_CREAT, 0666) or &print_error("(tie AnyDBM_File) $diffname");
     } else {
-        tie(%diffbase, "Yuki::YukiWikiDB", $diffname) or &print_error("(tie Yuki::YukiWikiDB) $diffname");
+        tie(%diffbase, "YukiWiki::YukiWikiDB", $diffname) or
+        &print_error("(tie YukiWiki::YukiWikiDB) $diffname");
     }
 }
 
@@ -1333,7 +1336,7 @@ sub is_exist_page {
 
 # Initialize plugins.
 sub init_plugin {
-    $plugin_manager = new Yuki::PluginManager($plugin_context, $modifier_dir_plugin);
+    $plugin_manager = new YukiWiki::PluginManager($plugin_context, $modifier_dir_plugin);
 }
 
 sub print_plugin_log {
@@ -1360,7 +1363,7 @@ ultram.online-buy.com
 
 # Thanks to Makio Tsukamoto for dc_date.
 sub update_rssfile {
-    my $rss = new Yuki::RSS(
+    my $rss = new YukiWiki::RSS(
         version => '1.0',
         encoding => $charset,
     );

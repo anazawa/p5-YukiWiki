@@ -1,4 +1,4 @@
-package Yuki::RSS;
+package YukiWiki::RSS;
 use strict;
 use vars qw($VERSION);
 

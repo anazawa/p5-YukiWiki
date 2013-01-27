@@ -1,4 +1,4 @@
-package Yuki::PluginManager;
+package YukiWiki::PluginManager;
 
 use UNIVERSAL qw(can);
 
