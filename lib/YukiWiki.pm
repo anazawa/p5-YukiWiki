@@ -1,5 +1,4 @@
 package YukiWiki;
-use parent 'CGI::Application';
 #
 # wiki.cgi - This is YukiWiki, yet another Wiki clone.
 #
@@ -13,19 +12,21 @@ use parent 'CGI::Application';
 ##############################
 # Libraries.
 use strict;
+use warnings;
 use lib qw(lib);
-use CGI qw(:standard);
+use parent 'CGI::Application';
 use CGI::Carp qw(fatalsToBrowser);
 use YukiWiki::RSS;
 use YukiWiki::DiffText qw(difftext);
 use YukiWiki::YukiWikiDB;
 use YukiWiki::PluginManager;
+use YukiWiki::Util qw(escape unescape encode decode get_now code_convert);
 use Jcode;
 use Fcntl;
 # Check if the server can use 'AnyDBM_File' or not.
 # eval 'use AnyDBM_File';
 # my $error_AnyDBM_File = $@;
-my $version = '2.1.3';
+our $VERSION = '2.1.3';
 ##############################
 #
 # You MUST modify following '$modifier_...' variables.
@@ -35,7 +36,7 @@ my $modifier_url = 'http://www.hyuki.com/';
 my $modifier_name = 'Hiroshi Yuki';
 my $modifier_dir_data = '.'; # Your data directory (not URL, but DIRECTORY).
 my $modifier_url_data = '.'; # Your data URL (not DIRECTORY, but URL).
-my $modifier_rss_title = "YukiWiki $version";
+my $modifier_rss_title = "YukiWiki $VERSION";
 my $modifier_rss_link = 'http://www.hyuki.com/yukiwiki/wiki.cgi';
 my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
 my $modifier_rss_description = 'This is YukiWiki, yet another Wiki clone';
@@ -149,12 +150,12 @@ my %page_command = (
 sub setup {
     my $self = shift;
 
-    &init_resource;
+    $self->init_resource;
     # &check_modifiers;
     $self->open_db;
-    &init_form;
-    &init_InterWikiName;
-    &init_plugin;
+    $self->init_form;
+    $self->init_InterWikiName;
+    $self->init_plugin;
 
     $self->mode_param( 'mycmd' );
 
@@ -198,12 +199,13 @@ sub do_read {
 
 sub do_edit {
     my $self = shift;
+    my $resource = $self->param('resource');
     my ($page) = &unarmor_name(&armor_name($form{mypage}));
     my $output = &print_header($page);
     if (not &is_editable($page)) {
-        $output .= &print_message($resource{cantchange});
+        $output .= &print_message($resource->{cantchange});
     } elsif (&is_frozen($page)) {
-        $output .= &print_message($resource{cantchange});
+        $output .= &print_message($resource->{cantchange});
     } else {
         $output .= &print_editform($database{$page}, &get_info($page, $info_ConflictChecker), admin=>0);
     }
@@ -213,12 +215,13 @@ sub do_edit {
 
 sub do_adminedit {
     my $self = shift;
+    my $resource = $self->param('resource');
     my ($page) = &unarmor_name(&armor_name($form{mypage}));
     my $output = &print_header($page);
     if (not &is_editable($page)) {
-        $output .= &print_message($resource{cantchange});
+        $output .= &print_message($resource->{cantchange});
     } else {
-        $output .= &print_message($resource{passwordneeded});
+        $output .= &print_message($resource->{passwordneeded});
         $output .= &print_editform($database{$page}, &get_info($page, $info_ConflictChecker), admin=>1);
     }
     $output .= &print_footer($page);
@@ -235,8 +238,9 @@ sub do_adminchangepasswordform {
 
 sub do_adminchangepassword {
     my $self = shift;
+    my $resource = $self->param('resource');
     if ($form{mynewpassword} ne $form{mynewpassword2}) {
-        &print_error($resource{passwordmismatcherror});
+        &print_error($resource->{passwordmismatcherror});
     }
     my ($validpassword_crypt) = &get_info($AdminSpecialPage, $info_AdminPassword);
     if ($validpassword_crypt) {
@@ -246,7 +250,7 @@ myoldpassword=$form{myoldpassword}
 mynewpassword=$form{mynewpassword}
 mynewpassword2=$form{mynewpassword2}
 EOD
-            &print_error($resource{passworderror});
+            &print_error($resource->{passworderror});
         }
     }
     my ($sec, $min, $hour, $day, $mon, $year, $weekday) = localtime(time);
@@ -257,7 +261,7 @@ EOD
     &set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
 
     my $output = &print_header($CompletedSuccessfully);
-    $output .= &print_message($resource{passwordchanged});
+    $output .= &print_message($resource->{passwordchanged});
     $output .= &print_footer($CompletedSuccessfully);
     $output;
 }
@@ -280,6 +284,7 @@ sub do_index {
 
 sub do_write {
     my $self = shift;
+
     if (&keyword_reject()) {
         return;
     }
@@ -350,7 +355,7 @@ sub do_searchform {
 
 sub do_search {
     my $self = shift;
-    my $word = &escape($form{mymsg});
+    my $word = YukiWiki::Util::escape($form{mymsg});
     my $output = &print_header($SearchPage);
     $output .= &print_searchform($word);
     my $counter = 0;
@@ -365,7 +370,7 @@ sub do_search {
         }
     }
     if ($counter == 0) {
-        $output .= &print_message($resource{notfound});
+        $output .= &print_message($self->param('resource')->{notfound});
     } else {
         $output .= qq|</ul>|;
     }
@@ -375,13 +380,14 @@ sub do_search {
 
 sub do_create {
     my $self = shift;
+    my $resource = $self->param('resource');
     my $output = &print_header($CreatePage);
     $output .= <<"EOD";
 <form action="$url_cgi" method="post">
     <input type="hidden" name="mycmd" value="edit">
-    <strong>$resource{newpagename}</strong><br>
+    <strong>$resource->{newpagename}</strong><br>
     <input type="text" name="mypage" value="" size="20">
-    <input type="submit" value="$resource{createbutton}"><br>
+    <input type="submit" value="$resource->{createbutton}"><br>
 </form>
 EOD
     $output .= &print_footer($CreatePage);
@@ -393,7 +399,7 @@ sub do_FrontPage {
     if ($fixedpage{$FrontPage}) {
         open(FILE, $file_FrontPage) or &print_error("($file_FrontPage)");
         my $content = join('', <FILE>);
-        &code_convert(\$content, $kanjicode);
+        YukiWiki::Util::code_convert(\$content, $kanjicode);
         close(FILE);
         my $output = &print_header($FrontPage);
         $output .= &print_content($content);
@@ -430,8 +436,8 @@ sub print_header {
     } else {
         $editable = 0;
     }
-    my $cookedpage = &encode($page);
-    my $escapedpage = &escape($page);
+    my $cookedpage = YukiWiki::Util::encode($page);
+    my $escapedpage = YukiWiki::Util::escape($page);
     return <<"EOD";
 <!DOCTYPE html
     PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
@@ -478,7 +484,7 @@ sub print_footer {
     return <<"EOD";
 <hr>
 <address class="footer">
-    Powered by <a href="http://www.hyuki.com/yukiwiki/">YukiWiki</a> $version <br />
+    Powered by <a href="http://www.hyuki.com/yukiwiki/">YukiWiki</a> $VERSION <br />
     Modified by <a href="$modifier_url">$modifier_name</a>.
 </address>
 <p class="footer">
@@ -487,26 +493,6 @@ sub print_footer {
 </body>
 </html>
 EOD
-}
-
-sub escape {
-    my $s = shift;
-    $s =~ s|\r\n|\n|g;
-    $s =~ s|\&|&amp;|g;
-    $s =~ s|<|&lt;|g;
-    $s =~ s|>|&gt;|g;
-    $s =~ s|"|&quot;|g;
-    return $s;
-}
-
-sub unescape {
-    my $s = shift;
-    # $s =~ s|\n|\r\n|g;
-    $s =~ s|\&amp;|\&|g;
-    $s =~ s|\&lt;|\<|g;
-    $s =~ s|\&gt;|\>|g;
-    $s =~ s|\&quot;|\"|g;
-    return $s;
 }
 
 sub print_content {
@@ -597,7 +583,7 @@ sub text_to_html {
             # BlockPlugin.
             my $original_line = $_;
             my $plugin_name = $1;
-            my $argument = &escape($3);
+            my $argument = YukiWiki::Util::escape($3);
             my $result = $plugin_manager->call($plugin_name, 'block', $argument);
             if (defined($result)) {
                 push(@result, splice(@saved));
@@ -636,10 +622,11 @@ sub text_to_html {
 
 sub back_push {
     my ($tag, $level, $savedref, $resultref, $attr) = @_;
+    $attr ||= q{};
     while (@$savedref > $level) {
         push(@$resultref, shift(@$savedref));
     }
-    if ($savedref->[0] ne "</$tag>") {
+    if ($savedref->[0] and $savedref->[0] ne "</$tag>") {
         push(@$resultref, splice(@$savedref));
     }
     while (@$savedref < $level) {
@@ -656,7 +643,7 @@ sub remove_tag {
 
 sub inline {
     my ($line) = @_;
-    $line = &escape($line);
+    $line = YukiWiki::Util::escape($line);
     $line =~ s|'''([^']+?)'''|<i>$1</i>|g;  # Italic
     $line =~ s|''([^']+?)''|<b>$1</b>|g;    # Bold
     $line =~ s|(\d\d\d\d-\d\d-\d\d \(\w\w\w\) \d\d:\d\d:\d\d)|<span class="date">$1</span>|g;   # Date
@@ -705,8 +692,8 @@ sub make_link {
     } else {
         $chunk = &unarmor_name($chunk);
         $chunk = &unescape($chunk); # To treat '&' or '>' or '<' correctly.
-        my $cookedchunk = &encode($chunk);
-        my $escapedchunk = &escape($chunk);
+        my $cookedchunk = YukiWiki::Util::encode($chunk);
+        my $escapedchunk = YukiWiki::Util::escape($chunk);
         if ($chunk =~ /^$interwiki_name$/) {
             my ($intername, $localname) = ($1, $2);
             my $remoteurl = $interwiki{$intername};
@@ -733,15 +720,19 @@ sub print_message {
 }
 
 sub init_form {
-    if (param()) {
-        foreach my $var (param()) {
-            $form{$var} = param($var);
+    my $self = shift;
+    my $q = $self->query;
+
+    my $query_string = $ENV{QUERY_STRING};
+    if ($q->param()) {
+        foreach my $var ($q->param()) {
+            $form{$var} = $q->param($var);
         }
     } else {
-        $ENV{QUERY_STRING} = $FrontPage;
+        $query_string = $FrontPage;
     }
 
-    my $query = &decode($ENV{QUERY_STRING});
+    my $query = YukiWiki::Util::decode($query_string);
     if ($page_command{$query}) {
         $form{mycmd} = $page_command{$query};
         $form{mypage} = $query;
@@ -767,8 +758,8 @@ sub init_form {
     # $form{mycmd} is frozen here.
     #
 
-    $form{mymsg} = &code_convert(\$form{mymsg}, $kanjicode);
-    $form{myname} = &code_convert(\$form{myname}, $kanjicode);
+    $form{mymsg} = YukiWiki::Util::code_convert(\$form{mymsg}, $kanjicode);
+    $form{myname} = YukiWiki::Util::code_convert(\$form{myname}, $kanjicode);
 }
 
 sub update_recent_changes {
@@ -836,7 +827,7 @@ $page
 $database{$page}
 --------
 EOD
-    &code_convert(\$message, 'jis');
+    YukiWiki::Util::code_convert(\$message, 'jis');
     open(MAIL, "| $modifier_sendmail");
     print MAIL $message;
     close(MAIL);
@@ -922,14 +913,14 @@ sub print_editform {
         } else {
             $editform .= qq($resource{previewempty});
         }
-        $mymsg = &escape($form{mymsg});
+        $mymsg = YukiWiki::Util::escape($form{mymsg});
     } else {
-        $mymsg = &escape($mymsg);
+        $mymsg = YukiWiki::Util::escape($mymsg);
     }
 
     my $edit = $mode{admin} ? 'adminedit' : 'edit';
-    my $escapedmypage = &escape($form{mypage});
-    my $escapedmypassword = &escape($form{mypassword});
+    my $escapedmypage = YukiWiki::Util::escape($form{mypage});
+    my $escapedmypassword = YukiWiki::Util::escape($form{mypassword});
 
     $editform .= <<"EOD";
 <form action="$url_cgi" method="post">
@@ -959,7 +950,7 @@ EOD
         # Show the format rule.
         open(FILE, $file_format) or &print_error("($file_format)");
         my $content = join('', <FILE>);
-        &code_convert(\$content, $kanjicode);
+        YukiWiki::Util::code_convert(\$content, $kanjicode);
         close(FILE);
         $editform .= &text_to_html($content, toc=>0);
     }
@@ -982,7 +973,7 @@ $resource{plugin_usage_example}: $usage->{example}
 ---)
 EOD
         }
-        &code_convert(\$plugin_usage, $kanjicode);
+        YukiWiki::Util::code_convert(\$plugin_usage, $kanjicode);
         $editform .= &text_to_html($plugin_usage, toc=>0);
     }
     return $editform;
@@ -1052,27 +1043,15 @@ sub is_bracket_name {
     }
 }
 
-sub decode {
-    my ($s) = @_;
-    $s =~ tr/+/ /;
-    $s =~ s/%([A-Fa-f0-9][A-Fa-f0-9])/pack("C", hex($1))/eg;
-    return $s;
-}
-
-# Thanks to WalWiki for [better encode].
-sub encode {
-    my ($encoded) = @_;
-    $encoded =~ s/(\W)/'%' . unpack('H2', $1)/eg;
-    return $encoded;
-}
-
 sub init_resource {
+    my $self = shift;
+    $self->param( resource => \%resource );
     open(FILE, $file_resource) or &print_error("(resource)");
     while (<FILE>) {
         chomp;
         next if /^#/;
         my ($key, $value) = split(/=/, $_, 2);
-        $resource{$key} = &code_convert(\$value, $kanjicode);
+        $resource{$key} = YukiWiki::Util::code_convert(\$value, $kanjicode);
     }
     close(FILE);
 }
@@ -1084,7 +1063,7 @@ sub conflict {
     }
     open(FILE, $file_conflict) or &print_error("(conflict)");
     my $content = join('', <FILE>);
-    &code_convert(\$content, $kanjicode);
+    YukiWiki::Util::code_convert(\$content, $kanjicode);
     close(FILE);
     &print_header($page);
     &print_content($content);
@@ -1093,22 +1072,9 @@ sub conflict {
     return 1;
 }
 
-sub get_now {
-    my (@week) = qw(Sun Mon Tue Wed Thu Fri Sat);
-    my ($sec, $min, $hour, $day, $mon, $year, $weekday) = localtime(time);
-    $year += 1900;
-    $mon++;
-    $mon = "0$mon" if $mon < 10;
-    $day = "0$day" if $day < 10;
-    $hour = "0$hour" if $hour < 10;
-    $min = "0$min" if $min < 10;
-    $sec = "0$sec" if $sec < 10;
-    $weekday = $week[$weekday];
-    return "$year-$mon-$day ($weekday) $hour:$min:$sec";
-}
-
 # [[YukiWiki http://www.hyuki.com/yukiwiki/wiki.cgi?euc($1)]]
 sub init_InterWikiName {
+    my $self = shift;
     my $content = $database{$InterWikiName};
     while ($content =~ /\[\[(\S+) +(\S+)\]\]/g) {
         my ($name, $url) = ($1, $2);
@@ -1119,14 +1085,14 @@ sub init_InterWikiName {
 sub interwiki_convert {
     my ($type, $localname) = @_;
     if ($type eq 'sjis' or $type eq 'euc') {
-        &code_convert(\$localname, $type);
+        YukiWiki::Util::code_convert(\$localname, $type);
         return &encode($localname);
     } elsif ($type eq 'ykwk') {
         # for YukiWiki1
         if ($localname =~ /^$wiki_name$/) {
             return $localname;
         } else {
-            &code_convert(\$localname, 'sjis');
+            YukiWiki::Util::code_convert(\$localname, 'sjis');
             return &encode("[[" . $localname . "]]");
         }
     } elsif ($type eq 'asis') {
@@ -1219,7 +1185,7 @@ sub do_comment {
 
 sub embedded_to_html {
     my ($embedded) = @_;
-    my $escapedmypage = &escape($form{mypage});
+    my $escapedmypage = YukiWiki::Util::escape($form{mypage});
     if ($embedded eq $embed_comment or $embedded eq $embed_rcomment) {
         my $conflictchecker = &get_info($form{mypage}, $info_ConflictChecker);
         return <<"EOD";
@@ -1239,14 +1205,9 @@ EOD
     }
 }
 
-sub code_convert {
-    my ($contentref, $kanjicode) = @_;
-    &Jcode::convert($contentref, $kanjicode);
-    return $$contentref;
-}
-
 sub do_diff {
     my $self = shift;
+    my $resource = $self->param('resource');
     if (not &is_editable($form{mypage})) {
         &do_read;
         return;
@@ -1254,10 +1215,10 @@ sub do_diff {
     &open_diff;
     my $title = $form{mypage};
     my $output = &print_header($title);
-    $_ = &escape($diffbase{$form{mypage}});
+    $_ = YukiWiki::Util::escape($diffbase{$form{mypage}});
     &close_diff;
-    $output .= qq(<h3>$resource{difftitle}</h3>);
-    $output .= qq($resource{diffnotice});
+    $output .= qq(<h3>$resource->{difftitle}</h3>);
+    $output .= qq($resource->{diffnotice});
     $output .= qq(<pre class="diff">);
     foreach (split(/\n/, $_)) {
         if (/^\+(.*)/) {
@@ -1304,6 +1265,7 @@ sub is_exist_page {
 
 # Initialize plugins.
 sub init_plugin {
+    my $self = shift;
     $plugin_manager = new YukiWiki::PluginManager($plugin_context, $modifier_dir_plugin);
 }
 
@@ -1348,8 +1310,8 @@ sub update_rssfile {
         /^\- (\d\d\d\d\-\d\d\-\d\d) \(...\) (\d\d:\d\d:\d\d) (\S+)/;    # date format.
         my $dc_date = "$1T$2$modifier_rss_timezone";
         my $title = &unarmor_name($3);
-        my $escaped_title = &escape($title);
-        my $link = $modifier_rss_link . '?' . &encode($title);
+        my $escaped_title = YukiWiki::Util::escape($title);
+        my $link = $modifier_rss_link . '?' . YukiWiki::Util::encode($title);
         my $description = $escaped_title . &escape(&get_subjectline($title));
         $rss->add_item(
             title => $escaped_title,

@@ -1,6 +1,8 @@
 package YukiWiki::PluginManager;
+use strict;
+use warnings;
 
-use UNIVERSAL qw(can);
+#use UNIVERSAL qw(can);
 
 # Be careful.
 # use strict;
@@ -28,9 +30,9 @@ sub new {
     for my $dir (@dirs) {
         for my $file (sort glob("$dir/*.pl")) {
             if (-e($file)) {
-                my $pluginname = $file;
-                $pluginname =~ s/.*?(\w+?)\.pl$/$1/;
-                $self->{pluginname_to_filename}->{$pluginname} = $file;
+                my $plugin = $file;
+                $plugin =~ s/.*?(\w+?)\.pl$/$1/;
+                $self->{pluginname_to_filename}->{$plugin} = $file;
                 if ($plugin =~ /^filter_/) {
                     push(@{$self->{filter}}, $plugin);
                 }
