@@ -1,0 +1,12 @@
+*<TMPL_VAR NAME="available_plugins">
+<TMPL_LOOP NAME="PLUGINS">
+** <TMPL_VAR NAME="name">
+---(
+<TMPL_VAR NAME="plugin_usage_name">: <TMPL_VAR NAME="name">
+<TMPL_VAR NAME="plugin_usage_version">: <TMPL_VAR NAME="version">
+<TMPL_VAR NAME="plugin_usage_author">: <TMPL_VAR NAME="author">
+<TMPL_VAR NAME="plugin_usage_syntax">: <TMPL_VAR NAME="syntax">
+<TMPL_VAR NAME="plugin_usage_description">: <TMPL_VAR NAME="description">
+<TMPL_VAR NAME="plugin_usage_example">: <TMPL_VAR NAME="example">
+---)
+</TMPL_LOOP>

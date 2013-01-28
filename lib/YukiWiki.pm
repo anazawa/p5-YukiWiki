@@ -49,7 +49,7 @@ my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
 #my $modifier_dbtype = 'YukiWikiDB';
 #my $modifier_sendmail = '';
 # my $modifier_sendmail = '/usr/sbin/sendmail -t -n';
-my $modifier_dir_plugin = './plugin';
+#my $modifier_dir_plugin = './plugin';
 ##############################
 #
 # You MAY modify following variables.
@@ -108,8 +108,8 @@ my $info_LastModified = 'LastModified';
 my $info_IsFrozen = 'IsFrozen';
 my $info_AdminPassword = 'AdminPassword';
 ##############################
-my $kanjicode = 'euc';
-my $charset = 'EUC-JP';
+my $kanjicode = 'utf8';
+my $charset = 'UTF-8';
 my $lang = 'ja';
 my %fixedpage = (
     $IndexPage => 1,
@@ -191,7 +191,7 @@ sub cgiapp_prerun {
 
     $self->param( form => \%form );
 
-    my $query_string = $ENV{QUERY_STRING};
+    my $query_string = $q->param('keywords') || q{}; # <=> $ENV{QUERY_STRING}
     if ($q->param()) {
         foreach my $var ($q->param()) {
             $form{$var} = $q->param($var);
@@ -200,7 +200,7 @@ sub cgiapp_prerun {
         $query_string = $FrontPage;
     }
 
-    my $query = YukiWiki::Util::decode($query_string);
+    my $query = YukiWiki::Util::decode( $query_string || q{} );
     if ($page_command{$query}) {
         $self->prerun_mode( $form{mycmd} = $page_command{$query} );
         $form{mypage} = $query;
@@ -236,17 +236,16 @@ sub cgiapp_prerun {
         mypreview => $form{mypreview},
     );
 
-    $self->add_callback( 'load_tmpl' => \&load_tmpl_prerun );
+    $self->add_callback( load_tmpl => 'before_load_tmpl' );
 }
 
-sub load_tmpl_prerun {
+sub before_load_tmpl {
     my ( $self, $ht_params, $tmpl_params, $tmpl_file ) = @_;
     $ht_params->{die_on_bad_params} = 0;
+    $ht_params->{global_vars} = 1;
     $tmpl_params->{VERSION} = $VERSION;
     $tmpl_params->{lang} = $lang;
     $tmpl_params->{charset} = $charset;
-    #$tmpl_params->{modifier_name} = $self->cfg('modifier_name');
-    #$tmpl_params->{icontag} = $self->cfg('icontag');
 }
 
 sub teardown {
@@ -259,7 +258,6 @@ sub do_read {
     my $mypage = $self->param('mypage');
     my $output = $self->render_header($mypage);
     $output .= &print_content($self->database->{$mypage});
-    #$output .= &print_footer($mypage);
     $output .= $self->render_footer($mypage);
     $output;
 }
@@ -272,13 +270,13 @@ sub do_edit {
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = $self->render_header($page);
     if (not &is_editable($page)) {
-        $output .= &print_message($resource->{cantchange});
+        $output .= $self->render_message($resource->{cantchange});
     } elsif (&is_frozen($page)) {
-        $output .= &print_message($resource->{cantchange});
+        $output .= $self->render_message($resource->{cantchange});
     } else {
-        $output .= &print_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>0);
+        $output .= $self->render_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>0);
     }
-    $output .= &print_footer($page);
+    $output .= $self->render_footer($page);
     $output;
 }
 
@@ -290,12 +288,12 @@ sub do_adminedit {
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = $self->render_header($page);
     if (not &is_editable($page)) {
-        $output .= &print_message($resource->{cantchange});
+        $output .= $self->render_message($resource->{cantchange});
     } else {
-        $output .= &print_message($resource->{passwordneeded});
-        $output .= &print_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>1);
+        $output .= $self->render_message($resource->{passwordneeded});
+        $output .= $self->render_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>1);
     }
-    $output .= &print_footer($page);
+    $output .= $self->render_footer($page);
     $output;
 }
 
@@ -333,7 +331,7 @@ EOD
     &set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
 
     my $output = $self->render_header($CompletedSuccessfully);
-    $output .= &print_message($resource->{passwordchanged});
+    $output .= $self->render_message($resource->{passwordchanged});
     $output .= $self->render_footer($CompletedSuccessfully);
     $output;
 }
@@ -376,7 +374,7 @@ sub do_write {
 
     if (not &is_editable($mypage)) {
         my $output = $self->render_header($mypage);
-        $output .= &print_message($resource->{cantchange});
+        $output .= $self->render_message($resource->{cantchange});
         $output .= $self->render_footer($mypage);
         return $output;
     }
@@ -404,7 +402,7 @@ sub do_write {
         }
         &set_info($mypage, $info_IsFrozen, 0 + $form->{myfrozen});
         my $output = $self->render_header($CompletedSuccessfully);
-        $output .= &print_message($resource->{saved});
+        $output .= $self->render_message($resource->{saved});
         $output .= &print_content(
             "$resource->{continuereading} @{[&armor_name($mypage)]}"
         );
@@ -418,7 +416,7 @@ sub do_write {
             $self->update_recent_changes;
         }
         my $output = $self->render_header($mypage);
-        $output .= &print_message($resource->{deleted});
+        $output .= $self->render_message($resource->{deleted});
         $output .= &print_footer($mypage);
         return $output;
     }
@@ -449,7 +447,7 @@ sub do_search {
         }
     }
     if ($counter == 0) {
-        $output .= &print_message($self->param('resource')->{notfound});
+        $output .= $self->render_message($self->param('resource')->{notfound});
     } else {
         $output .= qq|</ul>|;
     }
@@ -872,11 +870,15 @@ sub make_link {
     }
 }
 
-sub print_message {
-    my ($msg) = @_;
+#sub print_message {
+#    my ($msg) = @_;
+#    return qq(<p><strong>$msg</strong></p>);
+#}
+
+sub render_message {
+    my ($self, $msg) = @_;
     return qq(<p><strong>$msg</strong></p>);
 }
-
 
 sub update_recent_changes {
     my $self = shift;
@@ -1051,23 +1053,24 @@ sub print_searchform {
 EOD
 }
 
-sub print_editform {
-    my ($mymsg, $conflictchecker, %mode) = @_;
+sub render_editform {
+    my ($self, $mymsg, $conflictchecker, %mode) = @_;
     my $frozen = &is_frozen($form{mypage});
+    my $resource = $self->param('resource');
 
     my $editform;
 
     if ($form{mypreview}) {
         if ($form{mymsg}) {
             unless ($mode{conflict}) {
-                $editform .= qq(<h3>$resource{previewtitle}</h3>\n);
-                $editform .= qq($resource{previewnotice}\n);
+                $editform .= qq(<h3>$resource->{previewtitle}</h3>\n);
+                $editform .= qq($resource->{previewnotice}\n);
                 $editform .= qq(<div class="preview">\n);
                 $editform .= &print_content($form{mymsg});
                 $editform .= qq(</div>\n);
             }
         } else {
-            $editform .= qq($resource{previewempty});
+            $editform .= qq($resource->{previewempty});
         }
         $mymsg = YukiWiki::Util::escape($form{mymsg});
     } else {
@@ -1078,61 +1081,64 @@ sub print_editform {
     my $escapedmypage = YukiWiki::Util::escape($form{mypage});
     my $escapedmypassword = YukiWiki::Util::escape($form{mypassword});
 
-    $editform .= <<"EOD";
-<form action="$url_cgi" method="post">
-    @{[ $mode{admin} ? qq($resource{frozenpassword} <input type="password" name="mypassword" value="$escapedmypassword" size="10"><br>) : "" ]}
-    <input type="hidden" name="myConflictChecker" value="$conflictchecker">
-    <input type="hidden" name="mypage" value="$escapedmypage">
-    <textarea cols="$cols" rows="$rows" name="mymsg">
-$mymsg</textarea><br>
-@{[
-    $mode{admin} ?
-    qq(
-    <input type="radio" name="myfrozen" value="1" @{[$frozen ? qq(checked="checked") : ""]}>$resource{frozenbutton}
-    <input type="radio" name="myfrozen" value="0" @{[$frozen ? "" : qq(checked="checked")]}>$resource{notfrozenbutton}<br>)
-    : ""
-]}
-@{[
-    $mode{conflict} ? "" :
-    qq(
-        <input type="checkbox" name="mytouch" value="on" checked="checked">$resource{touch}<br>
-        <input type="submit" name="mypreview_$edit" value="$resource{previewbutton}">
-        <input type="submit" name="mypreview_write" value="$resource{savebutton}"><br>
-    )
-]}
-</form>
-EOD
+    my $file_format;
     unless ($mode{conflict}) {
         # Show the format rule.
-        open(FILE, $file_format) or &print_error("($file_format)");
+        my $path = $self->cfg('file_format');
+        open(FILE, $path) or die "($path)";
         my $content = join('', <FILE>);
         YukiWiki::Util::code_convert(\$content, $kanjicode);
         close(FILE);
-        $editform .= &text_to_html($content, toc=>0);
+        $file_format = &text_to_html($content, toc=>0);
     }
 
+    my $plugin_usage;
     unless ($mode{conflict}) {
         # Show plugin information.
-        my $plugin_usage = <<"EOD";
-*$resource{available_plugins}
-EOD
-        foreach my $usage (@{$plugin_manager->usage}) {
-            $plugin_usage .= <<"EOD";
-** $usage->{name}
----(
-$resource{plugin_usage_name}: $usage->{name}
-$resource{plugin_usage_version}: $usage->{version}
-$resource{plugin_usage_author}: $usage->{author}
-$resource{plugin_usage_syntax}: $usage->{syntax}
-$resource{plugin_usage_description}: $usage->{description}
-$resource{plugin_usage_example}: $usage->{example}
----)
-EOD
-        }
+        my $plugin_usage_tmpl = $self->load_tmpl('plugin_usage.txt');
+        $plugin_usage_tmpl->param(
+            available_plugins        => $resource->{available_plugins},
+            plugin_usage_name        => $resource->{plugin_usage_name},
+            plugin_usage_version     => $resource->{plugin_usage_version},
+            plugin_usage_author      => $resource->{plugin_usage_author},
+            plugin_usage_syntax      => $resource->{plugin_usage_syntax},
+            plugin_usage_description => $resource->{plugin_usage_description},
+            plugin_usage_example     => $resource->{plugin_usage_example},
+            PLUGINS                  => $self->plugin_manager->usage,
+        );
+        $plugin_usage = $plugin_usage_tmpl->output;
         YukiWiki::Util::code_convert(\$plugin_usage, $kanjicode);
-        $editform .= &text_to_html($plugin_usage, toc=>0);
+        $plugin_usage = &text_to_html($plugin_usage, toc=>0);
     }
-    return $editform;
+
+    my $tmpl = $self->load_tmpl('editform.html');
+
+    $tmpl->param(
+        url_cgi           => $self->cfg('url_cgi'),
+        cols              => $self->cfg('cols'),
+        rows              => $self->cfg('rows'),
+        admin             => $mode{admin},
+        conflict          => $mode{conflict},
+        escapedmypassword => $escapedmypassword,
+        conflictchecker   => $conflictchecker,
+        escapedmypage     => $escapedmypage,
+        mymsg             => $mymsg,
+        frozen            => $frozen,
+        edit              => $edit,
+        file_format       => $file_format,
+        plugin_usage      => $plugin_usage,
+        frozenpassword    => $resource->{frozenpassword},
+        frozenbutton      => $resource->{frozenbutton},
+        notfrozenbutton   => $resource->{notfrozenbutton},
+        touch             => $resource->{touch},
+        previewbutton     => $resource->{previewbutton},
+        savebutton        => $resource->{savebutton},
+
+    );
+
+    $editform .= $tmpl->output;
+
+    $editform;
 }
 
 sub print_passwordform {
@@ -1224,7 +1230,7 @@ sub conflict {
     close(FILE);
     my $output = $self->render_header($page);
     $output .= &print_content($content);
-    $output .= &print_editform($rawmsg, $form->{myConflictChecker}, frozen=>0, conflict=>1);
+    $output .= $self->render_editform($rawmsg, $form->{myConflictChecker}, frozen=>0, conflict=>1);
     $output .= $self->render_footer($page);
     return $output;
 }
@@ -1261,7 +1267,7 @@ sub interwiki_convert {
 
 sub get_info {
     my ($page, $key) = @_;
-    my %info = map { split(/=/, $_, 2) } split(/\n/, $infobase{$page});
+    my %info = map { split(/=/, $_, 2) } split(/\n/, $infobase{$page} || q{});
     return $info{$key};
 }
 
@@ -1428,8 +1434,12 @@ sub is_exist_page {
 # Initialize plugins.
 sub init_plugin {
     my $self = shift;
+    my $modifier_dir_plugin = $self->cfg('modifier_dir_plugin');
     $plugin_manager = new YukiWiki::PluginManager($plugin_context, $modifier_dir_plugin);
+    $self->param( plugin_manager => $plugin_manager );
 }
+
+sub plugin_manager { $_[0]->param('plugin_manager') }
 
 sub print_plugin_log {
     if ($plugin_context->{debug}) {

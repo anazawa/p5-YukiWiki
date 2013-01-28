@@ -1,4 +1,4 @@
-<h2>ÌÜ¼¡</h2>
+<h2>ç›®æ¬¡</h2>
 <ul>
 <li> <a href="#i0">HEADER1</a></li>
 <ul>
@@ -46,7 +46,7 @@ PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1
 <a href="http://www.hyuki.com/">http://www.hyuki.com/</a>
 <h3><a name="i5"> </a>HEADER2-2</h3>
 <p>
-YukiWiki2<a title="¤³¤Î¥Ú¡¼¥¸¤òÊÔ½¸¤·¤Þ¤¹" class="editlink" href="wiki.cgi?mycmd=edit&amp;mypage=YukiWiki2">?</a>
+YukiWiki2<a title="ã“ã®ãƒšãƒ¼ã‚¸ã‚’ç·¨é›†ã—ã¾ã™" class="editlink" href="wiki.cgi?mycmd=edit&amp;mypage=YukiWiki2">?</a>
 </p>
 <p>
 PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1PAR1

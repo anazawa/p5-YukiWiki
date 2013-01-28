@@ -1,0 +1,32 @@
+<form action="<TMPL_VAR NAME="url_cgi">" method="post">
+    <TMPL_IF NAME="admin">
+    <TMPL_VAR NAME="frozenpassword">
+    <input type="password" name="mypassword"
+        value="<TMPL_VAR NAME="escapedmypassword">" size="10"><br>
+    </TMPL_IF>
+    <input type="hidden" name="myConflictChecker"
+        value="<TMPL_VAR NAME="conflictchecker">">
+    <input type="hidden" name="mypage"
+        value="<TMPL_VAR NAME="escapedmypage">">
+    <textarea cols="<TMPL_VAR NAME="cols">" rows="<TMPL_VAR NAME="rows">" name="mymsg">
+<TMPL_VAR NAME="mymsg"></textarea><br>
+    <TMPL_IF NAME="admin">
+    <input type="radio" name="myfrozen" value="1"
+        <TMPL_IF NAME="frozen">checked="checked"</TMPL_IF>>
+    <TMPL_VAR NAME="frozenbutton">
+    <input type="radio" name="myfrozen" value="0"
+        <TMPL_IF NAME="frozen">checked="checked"</TMPL_IF>>
+    <TMPL_VAR NAME="notfrozenbutton"><br>
+    </TMPL_IF>
+    <TMPL_UNLESS NAME="conflict">
+    <input type="checkbox" name="mytouch" value="on" checked="checked">
+    <TMPL_VAR NAME="touch"><br>
+    <input type="submit" name="mypreview_<TMPL_VAR NAME="edit">"
+        value="<TMPL_VAR NAME="previewbutton">">
+    <input type="submit" name="mypreview_write"
+        value="<TMPL_VAR NAME="savebutton">"><br>
+    </TMPL_UNLESS>
+</form>
+
+<TMPL_VAR NAME="file_format">
+<TMPL_VAR NAME="plugin_usage">

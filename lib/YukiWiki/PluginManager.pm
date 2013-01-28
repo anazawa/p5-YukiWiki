@@ -68,7 +68,8 @@ sub call {
             # }
             # </use-can>
             my $funcname = "plugin_$type";
-            my $funcref = can($plugin, $funcname);
+            #my $funcref = can($plugin, $funcname);
+            my $funcref = $plugin->can($funcname);
             if (defined($funcref)) {
                 $result = $funcref->($argument, $self->{context});
             } else {
