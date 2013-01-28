@@ -8,7 +8,8 @@ sub plugin_block {
     my @raw_recent_changes = split(/\n/, $context->{database}->{RecentChanges});
     my @recent_changes = splice(@raw_recent_changes, 0, $count);
     my $recent_changes = join("\n", @recent_changes);
-    my $result = &main::text_to_html($recent_changes, toc=>0);
+    #my $result = &main::text_to_html($recent_changes, toc=>0);
+    my $result = $recent_changes;
     return $result;
 }
 

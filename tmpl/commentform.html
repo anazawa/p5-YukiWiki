@@ -1,0 +1,11 @@
+<form action="<TMPL_VAR NAME="url_cgi">" method="post">
+    <input type="hidden" name="mycmd" value="comment">
+    <input type="hidden" name="mypage" value="<TMPL_VAR NAME="escapedmypage">">
+    <input type="hidden" name="myConflictChecker"
+        value="<TMPL_VAR NAME="conflictchecker">">
+    <input type="hidden" name="mytouch" value="on">
+    <TMPL_VAR NAME="yourname">
+    <input type="text" name="myname" value="" size="10">
+    <input type="text" name="mymsg" value="" size="40">
+    <input type="submit" value="<TMPL_VAR NAME="commentbutton">">
+</form>

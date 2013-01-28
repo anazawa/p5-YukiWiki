@@ -17,7 +17,7 @@ use lib qw(lib);
 use parent 'CGI::Application';
 use CGI::Application::Plugin::Forward;
 use CGI::Application::Plugin::ConfigAuto qw/cfg/;
-use CGI::Carp qw(fatalsToBrowser);
+use CGI::Carp;
 use Fcntl;
 use YukiWiki::RSS;
 use YukiWiki::DiffText qw(difftext);
@@ -32,14 +32,14 @@ our $VERSION = '2.1.3';
 #
 # You MUST modify following '$modifier_...' variables.
 #
-my $modifier_mail = 'hyuki@hyuki.com';
-my $modifier_url = 'http://www.hyuki.com/';
-my $modifier_name = 'Hiroshi Yuki';
-my $modifier_dir_data = '.'; # Your data directory (not URL, but DIRECTORY).
-my $modifier_url_data = '.'; # Your data URL (not DIRECTORY, but URL).
+#my $modifier_mail = 'hyuki@hyuki.com';
+#my $modifier_url = 'http://www.hyuki.com/';
+#my $modifier_name = 'Hiroshi Yuki';
+#my $modifier_dir_data = '.'; # Your data directory (not URL, but DIRECTORY).
+#my $modifier_url_data = '.'; # Your data URL (not DIRECTORY, but URL).
 #my $modifier_rss_title = "YukiWiki $VERSION";
 #my $modifier_rss_link = 'http://www.hyuki.com/yukiwiki/wiki.cgi';
-my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
+#my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
 #my $modifier_rss_description = 'This is YukiWiki, yet another Wiki clone';
 #my $modifier_rss_timezone = '+09:00';
 ##############################
@@ -58,15 +58,15 @@ my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
 #my $file_resource = "$modifier_dir_data/resource.txt";
 #my $file_FrontPage = "$modifier_dir_data/frontpage.txt";
 #my $file_conflict = "$modifier_dir_data/conflict.txt";
-my $file_format = "$modifier_dir_data/format.txt";
+#my $file_format = "$modifier_dir_data/format.txt";
 #my $file_rss = "$modifier_dir_data/rss.xml";
 my $url_cgi = 'wiki.cgi';
-my $url_stylesheet = "$modifier_url_data/wiki.css";
-my $icontag = qq(<img src="$modifier_url_data/icon40x40.gif" alt="*" width="40" height="40" />);
+#my $url_stylesheet = "$modifier_url_data/wiki.css";
+#my $icontag = qq(<img src="$modifier_url_data/icon40x40.gif" alt="*" width="40" height="40" />);
 #my $maxrecent = 50;
 #my $max_message_length = 500_000; # -1 for unlimited.
-my $cols = 80;
-my $rows = 20;
+#my $cols = 80;
+#my $rows = 20;
 ##############################
 #
 # You MAY modify following variables.
@@ -77,7 +77,7 @@ my $rows = 20;
 my $editchar = '?';
 my $subject_delimiter = ' - ';
 my $use_autoimg = 1; # automatically convert image URL into <img> tag.
-my $use_exists = 0; # If you can use 'exists' method for your DB.
+#my $use_exists = 0; # If you can use 'exists' method for your DB.
 my $use_FixedFrontPage = 0;
 ##############################
 my $InterWikiName = 'InterWikiName';
@@ -108,9 +108,6 @@ my $info_LastModified = 'LastModified';
 my $info_IsFrozen = 'IsFrozen';
 my $info_AdminPassword = 'AdminPassword';
 ##############################
-my $kanjicode = 'utf8';
-my $charset = 'UTF-8';
-my $lang = 'ja';
 my %fixedpage = (
     $IndexPage => 1,
     $CreatePage => 1,
@@ -151,6 +148,12 @@ my %page_command = (
 sub setup {
     my $self = shift;
 
+    $self->param(
+        kanjicode => 'utf8',
+        charset   => 'UTF-8',
+        lang      => 'ja',
+    );
+
     $self->init_resource;
     # &check_modifiers;
     $self->open_db;
@@ -180,10 +183,14 @@ sub setup {
         diff                    => 'do_diff',
     );
 
-    $self->header_add( -charset => $charset );
+    $self->header_add( -charset => $self->param('charset') );
 
     return;
 }
+
+sub kanjicode { $_[0]->param('kanjicode') }
+sub charset { $_[0]->param('charset') }
+sub lang { $_[0]->param('lang') }
 
 sub cgiapp_prerun {
     my $self = shift;
@@ -226,6 +233,7 @@ sub cgiapp_prerun {
     # $form{mycmd} is frozen here.
     #
 
+    my $kanjicode = $self->param('kanjicode');
     $form{mymsg} = YukiWiki::Util::code_convert(\$form{mymsg}, $kanjicode);
     $form{myname} = YukiWiki::Util::code_convert(\$form{myname}, $kanjicode);
 
@@ -244,8 +252,8 @@ sub before_load_tmpl {
     $ht_params->{die_on_bad_params} = 0;
     $ht_params->{global_vars} = 1;
     $tmpl_params->{VERSION} = $VERSION;
-    $tmpl_params->{lang} = $lang;
-    $tmpl_params->{charset} = $charset;
+    $tmpl_params->{lang} = $self->param('lang');
+    $tmpl_params->{charset} = $self->param('charset');
 }
 
 sub teardown {
@@ -257,7 +265,7 @@ sub do_read {
     my $self = shift;
     my $mypage = $self->param('mypage');
     my $output = $self->render_header($mypage);
-    $output .= &print_content($self->database->{$mypage});
+    $output .= $self->render_content($self->database->{$mypage});
     $output .= $self->render_footer($mypage);
     $output;
 }
@@ -269,12 +277,12 @@ sub do_edit {
     my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = $self->render_header($page);
-    if (not &is_editable($page)) {
+    if (not $self->is_editable($page)) {
         $output .= $self->render_message($resource->{cantchange});
-    } elsif (&is_frozen($page)) {
+    } elsif ($self->is_frozen($page)) {
         $output .= $self->render_message($resource->{cantchange});
     } else {
-        $output .= $self->render_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>0);
+        $output .= $self->render_editform($database->{$page}, $self->get_info($page, $info_ConflictChecker), admin=>0);
     }
     $output .= $self->render_footer($page);
     $output;
@@ -287,11 +295,11 @@ sub do_adminedit {
     my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = $self->render_header($page);
-    if (not &is_editable($page)) {
+    if (not $self->is_editable($page)) {
         $output .= $self->render_message($resource->{cantchange});
     } else {
         $output .= $self->render_message($resource->{passwordneeded});
-        $output .= $self->render_editform($database->{$page}, &get_info($page, $info_ConflictChecker), admin=>1);
+        $output .= $self->render_editform($database->{$page}, $self->get_info($page, $info_ConflictChecker), admin=>1);
     }
     $output .= $self->render_footer($page);
     $output;
@@ -300,7 +308,8 @@ sub do_adminedit {
 sub do_adminchangepasswordform {
     my $self = shift;
     my $output = $self->render_header($AdminChangePassword);
-    $output .= &print_passwordform;
+    #$output .= &print_passwordform;
+    $output .= $self->render_passwordform;
     $output .= $self->render_footer($AdminChangePassword);
     $output;
 }
@@ -312,7 +321,7 @@ sub do_adminchangepassword {
     if ($form->{mynewpassword} ne $form->{mynewpassword2}) {
         die $resource->{passwordmismatcherror};
     }
-    my ($validpassword_crypt) = &get_info($AdminSpecialPage, $info_AdminPassword);
+    my ($validpassword_crypt) = $self->get_info($AdminSpecialPage, $info_AdminPassword);
     if ($validpassword_crypt) {
         if (not $self->valid_password($form->{myoldpassword})) {
             $self->send_mail_to_admin(<<"EOD", "AdminChangePassword");
@@ -328,7 +337,7 @@ EOD
     my $salt1 = $token[(time | $$) % scalar(@token)];
     my $salt2 = $token[($sec + $min*60 + $hour*60*60) % scalar(@token)];
     my $crypted = crypt($form->{mynewpassword}, "$salt1$salt2");
-    &set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
+    $self->set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
 
     my $output = $self->render_header($CompletedSuccessfully);
     $output .= $self->render_message($resource->{passwordchanged});
@@ -339,16 +348,31 @@ EOD
 sub do_index {
     my $self = shift;
     my $output = $self->render_header($IndexPage);
-    $output .= qq(<ul>);
+
+    my @pages;
     foreach my $page (sort keys %{$self->database}) {
-        if (&is_editable($page)) {
-            $output .= qq(<li><a href="$url_cgi?@{[&encode($page)]}">@{[&escape($page)]}</a>@{[&escape(&get_subjectline($page))]}</li>);
+        if ($self->is_editable($page)) {
             # print qq(<li>@{[&get_info($page, $info_IsFrozen)]}</li>);
             # print qq(<li>@{[0 + &is_frozen($page)]}</li>);
+            push @pages, {
+                page        => $page,
+                subjectline => $self->get_subjectline($page),
+            };
         }
     }
-    $output .= qq(</ul>);
-    $output .= &print_footer($IndexPage);
+
+    $output .= do {
+        my $tmpl = $self->load_tmpl;
+
+        $tmpl->param(
+            url_cgi => $self->cfg('url_cgi'),
+            pages   => \@pages,
+        );
+
+        $tmpl->output;
+    };
+
+    $output .= $self->render_footer($IndexPage);
     $output;
 }
 
@@ -372,7 +396,7 @@ sub do_write {
         return;
     }
 
-    if (not &is_editable($mypage)) {
+    if (not $self->is_editable($mypage)) {
         my $output = $self->render_header($mypage);
         $output .= $self->render_message($resource->{cantchange});
         $output .= $self->render_footer($mypage);
@@ -395,18 +419,18 @@ sub do_write {
     if ($form->{mymsg}) {
         $database->{$mypage} = $form->{mymsg};
         $self->send_mail_to_admin($mypage, "Modify");
-        &set_info($mypage, $info_ConflictChecker, '' . localtime);
+        $self->set_info($mypage, $info_ConflictChecker, '' . localtime);
         if ($form->{mytouch}) {
-            &set_info($mypage, $info_LastModified, '' . localtime);
+            $self->set_info($mypage, $info_LastModified, '' . localtime);
             $self->update_recent_changes;
         }
-        &set_info($mypage, $info_IsFrozen, 0 + $form->{myfrozen});
+        $self->set_info($mypage, $info_IsFrozen, 0 + $form->{myfrozen});
         my $output = $self->render_header($CompletedSuccessfully);
         $output .= $self->render_message($resource->{saved});
-        $output .= &print_content(
+        $output .= $self->render_content(
             "$resource->{continuereading} @{[&armor_name($mypage)]}"
         );
-        $output .= &print_footer($CompletedSuccessfully);
+        $output .= $self->render_footer($CompletedSuccessfully);
         return $output;
     } else {
         $self->send_mail_to_admin($mypage, "Delete");
@@ -417,7 +441,7 @@ sub do_write {
         }
         my $output = $self->render_header($mypage);
         $output .= $self->render_message($resource->{deleted});
-        $output .= &print_footer($mypage);
+        $output .= $self->render_footer($mypage);
         return $output;
     }
 }
@@ -425,7 +449,7 @@ sub do_write {
 sub do_searchform {
     my $self = shift;;
     my $output = $self->render_header($SearchPage);
-    $output .= &print_searchform("");
+    $output .= $self->render_searchform("");
     $output .= $self->render_footer($SearchPage);
     $output;
 }
@@ -434,23 +458,31 @@ sub do_search {
     my $self = shift;
     my $word = YukiWiki::Util::escape($form{mymsg});
     my $output = $self->render_header($SearchPage);
-    $output .= &print_searchform($word);
-    my $counter = 0;
+    $output .= $self->render_searchform($word);
+
+    my @pages;
     foreach my $page (sort keys %database) {
         next if $page =~ /^$RecentChanges$/;
         if ($database{$page} =~ /\Q$form{mymsg}\E/ or $page =~ /\Q$form{mymsg}\E/) {
-            if ($counter == 0) {
-                $output .= qq|<ul>|;
-            }
-            $output .= qq(<li><a href ="$url_cgi?@{[&encode($page)]}">@{[&escape($page)]}</a>@{[&escape(&get_subjectline($page))]}</li>);
-            $counter++;
+            push @pages, {
+                page        => $page,
+                subjectline => $self->get_subjectline($page),
+            };
         }
     }
-    if ($counter == 0) {
-        $output .= $self->render_message($self->param('resource')->{notfound});
-    } else {
-        $output .= qq|</ul>|;
+
+    if ( @pages ) {
+        my $tmpl = $self->load_tmpl;
+        $tmpl->param(
+            url_cgi => $self->cfg('url_cgi'),
+            pages   => \@pages,
+        );
+        $output .= $tmpl->output;
     }
+    else {
+        $output .= $self->render_message($self->resource->{notfound});
+    }
+
     $output .= $self->render_footer($SearchPage);
     $output;
 }
@@ -459,14 +491,17 @@ sub do_create {
     my $self = shift;
     my $resource = $self->param('resource');
     my $output = $self->render_header($CreatePage);
-    $output .= <<"EOD";
-<form action="$url_cgi" method="post">
-    <input type="hidden" name="mycmd" value="edit">
-    <strong>$resource->{newpagename}</strong><br>
-    <input type="text" name="mypage" value="" size="20">
-    <input type="submit" value="$resource->{createbutton}"><br>
-</form>
-EOD
+
+    $output .= do {
+        my $tmpl = $self->load_tmpl;
+        $tmpl->param(
+            url_cgi      => $self->cfg('url_cgi'),
+            newpagename  => $resource->{newpagename},
+            createbutton => $resource->{createbutton},
+        );
+        $tmpl->output;
+    };
+
     $output .= $self->render_footer($CreatePage);
     $output;
 }
@@ -477,10 +512,10 @@ sub do_FrontPage {
         my $file_FrontPage = $self->cfg('file_FrontPage');
         open(FILE, $file_FrontPage) or die "($file_FrontPage)";
         my $content = join('', <FILE>);
-        YukiWiki::Util::code_convert(\$content, $kanjicode);
+        YukiWiki::Util::code_convert(\$content, $self->kanjicode);
         close(FILE);
         my $output = $self->render_header($FrontPage);
-        $output .= &print_content($content);
+        $output .= $self->render_content($content);
         $output .= $self->render_footer($FrontPage);
         return $output;
     } else {
@@ -490,20 +525,11 @@ sub do_FrontPage {
     }
 }
 
-sub print_error {
-    my ($msg) = @_;
-    &print_header($ErrorPage);
-    print qq(<p><strong class="error">$msg</strong></p>);
-    &print_plugin_log;
-    &print_footer($ErrorPage);
-    exit(0);
-}
-
 sub do_error {
     my ( $self, $msg ) = @_;
     my $output = $self->render_header($ErrorPage);
     $output .= qq(<p><strong class="error">$msg</strong></p>);
-    $output .= &print_plugin_log;
+    $output .= $self->render_plugin_log;
     $output .= $self->render_footer($ErrorPage);
     $output;
 }
@@ -514,11 +540,11 @@ sub render_header {
     my $bodyclass = "normal";
     my $editable = 0;
     my $admineditable = 0;
-    if (&is_frozen($page) and $form{mycmd} =~ /^(read|write)$/) {
+    if ($self->is_frozen($page) and $form{mycmd} =~ /^(read|write)$/) {
         $editable = 0;
         $admineditable = 1;
         $bodyclass = "frozen";
-    } elsif (&is_editable($page) and $form{mycmd} =~ /^(read|write)$/) {
+    } elsif ($self->is_editable($page) and $form{mycmd} =~ /^(read|write)$/) {
         $admineditable = 1;
         $editable = 1;
     } else {
@@ -535,7 +561,7 @@ sub render_header {
         FrontPage            => $FrontPage,
         RecentChanges        => $RecentChanges,
         page                 => $page,
-        subjectline          => &get_subjectline($page),
+        subjectline          => $self->get_subjectline($page),
         escapedpage          => $escapedpage,
         bodyclass            => $bodyclass,
         admineditable        => $admineditable,
@@ -562,80 +588,6 @@ sub render_header {
 
 }
 
-sub print_header {
-    my ($page) = @_;
-    my $bodyclass = "normal";
-    my $editable = 0;
-    my $admineditable = 0;
-    if (&is_frozen($page) and $form{mycmd} =~ /^(read|write)$/) {
-        $editable = 0;
-        $admineditable = 1;
-        $bodyclass = "frozen";
-    } elsif (&is_editable($page) and $form{mycmd} =~ /^(read|write)$/) {
-        $admineditable = 1;
-        $editable = 1;
-    } else {
-        $editable = 0;
-    }
-    my $cookedpage = YukiWiki::Util::encode($page);
-    my $escapedpage = YukiWiki::Util::escape($page);
-    return <<"EOD";
-<!DOCTYPE html
-    PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
-    "http://www.w3.org/TR/html4/loose.dtd">
-<html lang="$lang">
-<head>
-    <meta http-equiv="Content-Language" content="$lang">
-    <meta http-equiv="Content-Type" content="text/html; charset=$charset">
-    <title>$escapedpage @{[&escape(&get_subjectline($page))]}</title>
-    <link rel="index" href="$url_cgi?$IndexPage">
-    <link rev="made" href="mailto:$modifier_mail">
-    <link rel="stylesheet" type="text/css" href="$url_stylesheet">
-    <link rel="alternate" type="application/rss+xml" title="RSS" href="$modifier_rss_about" />
-</head>
-<body class="$bodyclass">
-<div class="tools">
-    @{[ $admineditable
-        ? qq(<a title="$resource{admineditthispage}" href="$url_cgi?mycmd=adminedit&amp;mypage=$cookedpage">$resource{admineditbutton}</a> | )
-        : qq()
-    ]}
-    @{[ $editable
-        ? qq(<a title="$resource{editthispage}" href="$url_cgi?mycmd=edit&amp;mypage=$cookedpage">$resource{editbutton}</a> | )
-        : qq()
-    ]}
-    @{[ $admineditable
-        ? qq(<a href="$url_cgi?mycmd=diff&amp;mypage=$cookedpage">$resource{diffbutton}</a> | )
-        : qq()
-    ]}
-    <a href="$url_cgi?$CreatePage">$resource{createbutton}</a> | 
-    <a href="$url_cgi?$IndexPage">$resource{indexbutton}</a> | 
-    <a href="$modifier_rss_about">$resource{rssbutton}</a> | 
-    <a href="$url_cgi?$FrontPage">$FrontPage</a> | 
-    <a href="$url_cgi?$SearchPage">$resource{searchbutton}</a> | 
-    <a href="$url_cgi?$RecentChanges">$resource{recentchangesbutton}</a>
-</div>
-<h1 class="header"><a
-    title="$resource{searchthispage}"
-    href="$url_cgi?mycmd=search&amp;mymsg=$cookedpage">@{[&escape($page)]}</a>@{[&escape(&get_subjectline($page))]}</h1>
-EOD
-}
-
-sub print_footer {
-    my ($page) = @_;
-    return <<"EOD";
-<hr>
-<address class="footer">
-    Powered by <a href="http://www.hyuki.com/yukiwiki/">YukiWiki</a> $VERSION <br />
-    Modified by <a href="$modifier_url">$modifier_name</a>.
-</address>
-<p class="footer">
-    <a href="http://www.hyuki.com/yukiwiki/">$icontag</a>
-</p>
-</body>
-</html>
-EOD
-}
-
 sub render_footer {
     my $self = shift;
     my $page = shift;
@@ -651,18 +603,19 @@ sub render_footer {
     $tmpl->output;
 }
 
-sub print_content {
-    my ($rawcontent) = @_;
-    return &text_to_html($rawcontent, toc=>1);
+sub render_content {
+    my ($self, $rawcontent) = @_;
+    return $self->text_to_html($rawcontent, toc=>1);
 }
 
 sub text_to_html {
-    my ($txt, %option) = @_;
+    my ($self, $txt, %option) = @_;
     my (@txt) = split(/\r?\n/, $txt);
     my (@toc);
     my $verbatim;
     my $tocnum = 0;
     my (@saved, @result);
+    my $inline = sub { $self->inline(@_) }; # alias
     unshift(@saved, "</p>");
     push(@result, "<p>");
     foreach (@txt) {
@@ -684,12 +637,14 @@ sub text_to_html {
         if (/^(\*{1,3})(.+)/) {
             # $hn = 'h2', 'h3' or 'h4'
             my $hn = "h" . (length($1) + 1);
-            push(@toc, '-' x length($1) . qq( <a href="#i$tocnum">) . &remove_tag(&inline($2)) . qq(</a>\n));
-            push(@result, splice(@saved), qq(<$hn><a name="i$tocnum"> </a>) . &inline($2) . qq(</$hn>));
+            push(@toc, '-' x length($1) . qq( <a href="#i$tocnum">)
+                . &remove_tag($inline->($2)) . qq(</a>\n));
+            push(@result, splice(@saved), qq(<$hn><a name="i$tocnum"> </a>)
+                . $inline->($2) . qq(</$hn>));
             $tocnum++;
         } elsif (/^(-{2,3})\($/) {
             if ($& eq '--(') {
-                $verbatim = { func => \&inline, done => '--)', class => 'verbatim-soft' };
+                $verbatim = { func => $inline, done => '--)', class => 'verbatim-soft' };
             } else {
                 $verbatim = { func => \&escape, done => '---)', class => 'verbatim-hard' };
             }
@@ -698,13 +653,14 @@ sub text_to_html {
             push(@result, splice(@saved), '<hr>');
         } elsif (/^(-{1,3})(.+)/) {
             &back_push('ul', length($1), \@saved, \@result);
-            push(@result, '<li>' . &inline($2) . '</li>');
+            push(@result, '<li>' . $inline->($2) . '</li>');
         } elsif (/^:([^:]+):(.+)/) {
             &back_push('dl', 1, \@saved, \@result);
-            push(@result, '<dt>' . &inline($1) . '</dt>', '<dd>' . &inline($2) . '</dd>');
+            push(@result, '<dt>' . $inline->($1) . '</dt>', '<dd>'
+                . $inline->($2) . '</dd>');
         } elsif (/^(>{1,3})(.+)/) {
             &back_push('blockquote', length($1), \@saved, \@result);
-            push(@result, &inline($2));
+            push(@result, $inline->($2));
         } elsif (/^$/) {
             push(@result, splice(@saved));
             unshift(@saved, "</p>");
@@ -727,7 +683,8 @@ sub text_to_html {
                         $colspan[$i]++;
                     }
                     $colspan[$i] = ($colspan[$i] > 1) ? sprintf(' colspan="%d"', $colspan[$i]) : '';
-                    $value[$i] = sprintf('<td%s%s>%s</td>', $align[$i], $colspan[$i], &inline($value[$i]));
+                    $value[$i] = sprintf('<td%s%s>%s</td>', $align[$i],
+                        $colspan[$i], $inline->($value[$i]));
                 } else {
                     $value[$i] = '';
                 }
@@ -740,7 +697,7 @@ sub text_to_html {
             my $original_line = $_;
             my $plugin_name = $1;
             my $argument = YukiWiki::Util::escape($3);
-            my $result = $plugin_manager->call($plugin_name, 'block', $argument);
+            my $result = $self->plugin_manager->call($plugin_name, 'block', $argument);
             if (defined($result)) {
                 push(@result, splice(@saved));
             } else {
@@ -748,7 +705,7 @@ sub text_to_html {
             }
             push(@result, $result);
         } else {
-            push(@result, &inline($_));
+            push(@result, $inline->($_));
         }
     }
     push(@result, splice(@saved));
@@ -767,7 +724,8 @@ sub text_to_html {
 
         # Insert "table of contents".
         if (@tocresult) {
-            unshift(@tocresult, qq(<h2>$resource{table_of_contents}</h2>));
+            my $resource = $self->resource;
+            unshift(@tocresult, qq(<h2>$resource->{table_of_contents}</h2>));
         }
 
         return join("\n", @tocresult, @result);
@@ -798,7 +756,7 @@ sub remove_tag { # function
 }
 
 sub inline {
-    my ($line) = @_;
+    my ($self, $line) = @_;
     $line = YukiWiki::Util::escape($line);
     $line =~ s|'''([^']+?)'''|<i>$1</i>|g;  # Italic
     $line =~ s|''([^']+?)''|<b>$1</b>|g;    # Bold
@@ -816,13 +774,13 @@ sub inline {
                     ($inline_plugin)            # &user_defined_plugin(123,hello)
                 )
             !
-                &make_link($1)
+                $self->make_link($1)
             !gex;
     return $line;
 }
 
 sub make_link {
-    my $chunk = shift;
+    my ($self, $chunk) = @_;
     if ($chunk =~ /^(http|https|ftp):/) {
         if ($use_autoimg and $chunk =~ /\.(gif|png|jpeg|jpg)$/) {
             return qq(<a href="$chunk"><img src="$chunk"></a>);
@@ -834,7 +792,7 @@ sub make_link {
     } elsif ($chunk =~ /^$interwiki_definition$/) {
         return qq(<span class="InterWiki">$chunk</span>);
     } elsif ($chunk =~ /^$embedded_name$/) {
-        return &embedded_to_html($chunk);
+        return $self->embedded_to_html($chunk);
     } elsif ($chunk =~ /^$inline_plugin$/) {
         # InlinePlugin.
         my $plugin_name = $1;
@@ -854,13 +812,13 @@ sub make_link {
             my ($intername, $localname) = ($1, $2);
             my $remoteurl = $interwiki{$intername};
             if ($remoteurl =~ /^(http|https|ftp):\/\//) { # Check if scheme if valid.
-                $remoteurl =~ s/\b(euc|sjis|ykwk|asis)\(\$1\)/&interwiki_convert($1, $localname)/e;
+                $remoteurl =~ s/\b(euc|sjis|ykwk|asis)\(\$1\)/$self->interwiki_convert($1, $localname)/e;
                 return qq(<a href="$remoteurl">$escapedchunk</a>);
             } else {
                 return $escapedchunk;
             }
         } elsif ($database{$chunk}) {
-            my $subject = &escape(&get_subjectline($chunk, delimiter => ''));
+            my $subject = &escape($self->get_subjectline($chunk, delimiter => ''));
             return qq(<a title="$subject" href="$url_cgi?$cookedchunk">$escapedchunk</a>);
         } elsif ($page_command{$chunk}) {
             return qq(<a title="$escapedchunk" href="$url_cgi?$cookedchunk">$escapedchunk</a>);
@@ -869,11 +827,6 @@ sub make_link {
         }
     }
 }
-
-#sub print_message {
-#    my ($msg) = @_;
-#    return qq(<p><strong>$msg</strong></p>);
-#}
 
 sub render_message {
     my ($self, $msg) = @_;
@@ -888,18 +841,18 @@ sub update_recent_changes {
         '-',
         &get_now,
         &armor_name($mypage),
-        &get_subjectline($mypage),
+        $self->get_subjectline($mypage),
     );
     my @oldupdates = split(/\r?\n/, $database->{$RecentChanges});
     my @updates;
     foreach (@oldupdates) {
         /^\- \d\d\d\d\-\d\d\-\d\d \(...\) \d\d:\d\d:\d\d (\S+)/;    # date format.
         my $name = &unarmor_name($1);
-        if (&is_exist_page($name) and ($name ne $mypage)) {
+        if ($self->is_exist_page($name) and ($name ne $mypage)) {
             push(@updates, $_);
         }
     }
-    if (&is_exist_page($mypage)) {
+    if ($self->is_exist_page($mypage)) {
         unshift(@updates, $update);
     }
     splice(@updates, $self->cfg('maxrecent') + 1);
@@ -915,8 +868,8 @@ sub update_recent_changes {
 }
 
 sub get_subjectline {
-    my ($page, %option) = @_;
-    if (not &is_editable($page)) {
+    my ($self, $page, %option) = @_;
+    if (not $self->is_editable($page)) {
         return "";
     } else {
         # Delimiter check.
@@ -971,16 +924,18 @@ sub open_db {
     my $infoname = $self->cfg('infoname');
 
     if ($modifier_dbtype eq 'dbmopen') {
-        dbmopen(%database, $dataname, 0666) or &print_error("(dbmopen) $dataname");
-        dbmopen(%infobase, $infoname, 0666) or &print_error("(dbmopen) $infoname");
+        dbmopen(%database, $dataname, 0666) or croak("(dbmopen) $dataname");
+        dbmopen(%infobase, $infoname, 0666) or croak("(dbmopen) $infoname");
     } elsif ($modifier_dbtype eq 'AnyDBM_File') {
-        tie(%database, "AnyDBM_File", $dataname, O_RDWR|O_CREAT, 0666) or &print_error("(tie AnyDBM_File) $dataname");
-        tie(%infobase, "AnyDBM_File", $infoname, O_RDWR|O_CREAT, 0666) or &print_error("(tie AnyDBM_File) $infoname");
+        tie(%database, "AnyDBM_File", $dataname, O_RDWR|O_CREAT, 0666)
+            or croak("(tie AnyDBM_File) $dataname");
+        tie(%infobase, "AnyDBM_File", $infoname, O_RDWR|O_CREAT, 0666)
+            or croak("(tie AnyDBM_File) $infoname");
     } else {
-        tie(%database, "YukiWiki::DB", $dataname) or
-        &print_error("(tie YukiWiki::DB) $dataname");
-        tie(%infobase, "YukiWiki::DB", $infoname) or
-        &print_error("(tie YukiWiki::DB) $infoname");
+        tie(%database, "YukiWiki::DB", $dataname)
+            or croak("(tie YukiWiki::DB) $dataname");
+        tie(%infobase, "YukiWiki::DB", $infoname)
+            or croak("(tie YukiWiki::DB) $infoname");
     }
 
     $self->param(
@@ -1042,20 +997,23 @@ sub close_diff {
 
 sub diffbase { $_[0]->param('diffbase') }
 
-sub print_searchform {
-    my ($word) = @_;
-    return <<"EOD";
-<form action="$url_cgi" method="get">
-    <input type="hidden" name="mycmd" value="search">
-    <input type="text" name="mymsg" value="$word" size="20">
-    <input type="submit" value="$resource{searchbutton}">
-</form>
-EOD
+sub render_searchform {
+    my $self = shift;
+    my $word = shift;
+    my $tmpl = $self->load_tmpl('searchform.html');
+
+    $tmpl->param(
+        url_cgi      => $self->cfg('url_cgi'),
+        word         => $word,
+        searchbutton => $self->resource->{searchbutton},
+    );
+
+    $tmpl->output;
 }
 
 sub render_editform {
     my ($self, $mymsg, $conflictchecker, %mode) = @_;
-    my $frozen = &is_frozen($form{mypage});
+    my $frozen = $self->is_frozen($form{mypage});
     my $resource = $self->param('resource');
 
     my $editform;
@@ -1066,7 +1024,7 @@ sub render_editform {
                 $editform .= qq(<h3>$resource->{previewtitle}</h3>\n);
                 $editform .= qq($resource->{previewnotice}\n);
                 $editform .= qq(<div class="preview">\n);
-                $editform .= &print_content($form{mymsg});
+                $editform .= $self->render_content($form{mymsg});
                 $editform .= qq(</div>\n);
             }
         } else {
@@ -1087,9 +1045,9 @@ sub render_editform {
         my $path = $self->cfg('file_format');
         open(FILE, $path) or die "($path)";
         my $content = join('', <FILE>);
-        YukiWiki::Util::code_convert(\$content, $kanjicode);
+        YukiWiki::Util::code_convert(\$content, $self->kanjicode);
         close(FILE);
-        $file_format = &text_to_html($content, toc=>0);
+        $file_format = $self->text_to_html($content, toc=>0);
     }
 
     my $plugin_usage;
@@ -1107,8 +1065,8 @@ sub render_editform {
             PLUGINS                  => $self->plugin_manager->usage,
         );
         $plugin_usage = $plugin_usage_tmpl->output;
-        YukiWiki::Util::code_convert(\$plugin_usage, $kanjicode);
-        $plugin_usage = &text_to_html($plugin_usage, toc=>0);
+        YukiWiki::Util::code_convert(\$plugin_usage, $self->kanjicode);
+        $plugin_usage = $self->text_to_html($plugin_usage, toc=>0);
     }
 
     my $tmpl = $self->load_tmpl('editform.html');
@@ -1141,20 +1099,24 @@ sub render_editform {
     $editform;
 }
 
-sub print_passwordform {
-        return <<"EOD";
-<form action="$url_cgi" method="post">
-    <input type="hidden" name="mycmd" value="adminchangepassword">
-    $resource{oldpassword} <input type="password" name="myoldpassword" size="10"><br>
-    $resource{newpassword} <input type="password" name="mynewpassword" size="10"><br>
-    $resource{newpassword2} <input type="password" name="mynewpassword2" size="10"><br>
-    <input type="submit" value="$resource{changepasswordbutton}"><br>
-</form>
-EOD
+sub render_passwordform {
+    my $self     = shift;
+    my $tmpl     = $self->load_tmpl('passwordform.html');
+    my $resource = $self->param('resource');
+
+    $tmpl->param(
+        url_cgi              => $self->cfg('url_cgi'),
+        oldpassword          => $resource->{oldpassword},
+        newpassword          => $resource->{newpassword},
+        newpassword2         => $resource->{newpassword2},
+        changepasswordbutton => $resource->{changepasswordbutton},
+    );
+
+    $tmpl->output;
 }
 
 sub is_editable {
-    my ($page) = @_;
+    my ($self, $page) = @_;
     if (&is_bracket_name($page)) {
         return 0;
     } elsif ($fixedpage{$page}) {
@@ -1207,8 +1169,9 @@ sub is_bracket_name {
 
 sub init_resource {
     my $self = shift;
+    my $kanjicode = $self->param('kanjicode');
     $self->param( resource => \%resource );
-    open(FILE, $self->cfg('file_resource')) or &print_error("(resource)");
+    open(FILE, $self->cfg('file_resource')) or croak("(resource)");
     while (<FILE>) {
         chomp;
         next if /^#/;
@@ -1218,18 +1181,20 @@ sub init_resource {
     close(FILE);
 }
 
+sub resource { $_[0]->param('resource') }
+
 sub conflict {
     my ($self, $page, $rawmsg) = @_;
     my $form = $self->param('form');
-    if ($form->{myConflictChecker} eq &get_info($page, $info_ConflictChecker)) {
+    if ($form->{myConflictChecker} eq $self->get_info($page, $info_ConflictChecker)) {
         return 0;
     }
     open(FILE, $self->cfg('file_conflict')) or die "(conflict)";
     my $content = join('', <FILE>);
-    YukiWiki::Util::code_convert(\$content, $kanjicode);
+    YukiWiki::Util::code_convert(\$content, $self->kanjicode);
     close(FILE);
     my $output = $self->render_header($page);
-    $output .= &print_content($content);
+    $output .= $self->render_content($content);
     $output .= $self->render_editform($rawmsg, $form->{myConflictChecker}, frozen=>0, conflict=>1);
     $output .= $self->render_footer($page);
     return $output;
@@ -1246,7 +1211,7 @@ sub init_InterWikiName {
 }
 
 sub interwiki_convert {
-    my ($type, $localname) = @_;
+    my ($self, $type, $localname) = @_;
     if ($type eq 'sjis' or $type eq 'euc') {
         YukiWiki::Util::code_convert(\$localname, $type);
         return &encode($localname);
@@ -1266,26 +1231,28 @@ sub interwiki_convert {
 }
 
 sub get_info {
-    my ($page, $key) = @_;
-    my %info = map { split(/=/, $_, 2) } split(/\n/, $infobase{$page} || q{});
+    my ($self, $page, $key) = @_;
+    my $info = $self->infobase->{$page} || q{};
+    my %info = map { split(/=/, $_, 2) } split(/\n/, $info);
     return $info{$key};
 }
 
 sub set_info {
-    my ($page, $key, $value) = @_;
-    my %info = map { split(/=/, $_, 2) } split(/\n/, $infobase{$page});
+    my ($self, $page, $key, $value) = @_;
+    my $infobase = $self->param('infobase');
+    my %info = map { split(/=/, $_, 2) } split(/\n/, $infobase->{$page});
     $info{$key} = $value;
     my $s = '';
     for (keys %info) {
         $s .= "$_=$info{$_}\n";
     }
-    $infobase{$page} = $s;
+    $infobase->{$page} = $s;
 }
 
 sub frozen_reject {
     my $self = shift;
     my $form = $self->param('form');
-    my ($isfrozen) = &get_info($form->{mypage}, $info_IsFrozen);
+    my ($isfrozen) = $self->get_info($form->{mypage}, $info_IsFrozen);
     my ($willbefrozen) = $form->{myfrozen};
     if (not $isfrozen and not $willbefrozen) {
         # You need no check.
@@ -1294,7 +1261,7 @@ sub frozen_reject {
         # You are admin.
         return 0;
     } else {
-        die $self->param('resource')->{passworderror};
+        die $self->resource->{passworderror};
         return 1;
     }
 }
@@ -1306,7 +1273,7 @@ sub length_reject {
         return 0;
     }
     if ($max_message_length < length($self->param('form')->{mymsg})) {
-        die $self->param('resource')->{toolongpost} . $max_message_length;
+        die $self->resource->{toolongpost} . $max_message_length;
         return 1;
     }
     return 0;
@@ -1314,7 +1281,7 @@ sub length_reject {
 
 sub valid_password {
     my ($self, $givenpassword) = @_;
-    my ($validpassword_crypt) = &get_info($AdminSpecialPage, $info_AdminPassword);
+    my ($validpassword_crypt) = $self->get_info($AdminSpecialPage, $info_AdminPassword);
     if (crypt($givenpassword, $validpassword_crypt) eq $validpassword_crypt) {
         return 1;
     } else {
@@ -1323,8 +1290,8 @@ sub valid_password {
 }
 
 sub is_frozen {
-    my ($page) = @_;
-    if (&get_info($page, $info_IsFrozen)) {
+    my ($self, $page) = @_;
+    if ($self->get_info($page, $info_IsFrozen)) {
         return 1;
     } else {
         return 0;
@@ -1352,22 +1319,22 @@ sub do_comment {
 }
 
 sub embedded_to_html {
-    my ($embedded) = @_;
+    my ($self, $embedded) = @_;
     my $escapedmypage = YukiWiki::Util::escape($form{mypage});
     if ($embedded eq $embed_comment or $embedded eq $embed_rcomment) {
-        my $conflictchecker = &get_info($form{mypage}, $info_ConflictChecker);
-        return <<"EOD";
-<form action="$url_cgi" method="post">
-    <input type="hidden" name="mycmd" value="comment">
-    <input type="hidden" name="mypage" value="$escapedmypage">
-    <input type="hidden" name="myConflictChecker" value="$conflictchecker">
-    <input type="hidden" name="mytouch" value="on">
-    $resource{yourname}
-    <input type="text" name="myname" value="" size="10">
-    <input type="text" name="mymsg" value="" size="40">
-    <input type="submit" value="$resource{commentbutton}">
-</form>
-EOD
+        my $conflictchecker = $self->get_info($form{mypage}, $info_ConflictChecker);
+        my $resource = $self->param('resource');
+        return do {
+            my $tmpl = $self->load_tmpl('commentform.html');
+            $tmpl->param(
+                url_cgi         => $self->cfg('url_cgi'),
+                escapedmypage   => $escapedmypage,
+                conflictchecker => $conflictchecker,
+                yourname        => $resource->{yourname},
+                commentbutton   => $resource->{commentbutton},
+            );
+            $tmpl->output; 
+        };
     } else {
         return $embedded;
     }
@@ -1377,7 +1344,7 @@ sub do_diff {
     my $self = shift;
     my $resource = $self->param('resource');
     my $form = $self->param('form');
-    if (not &is_editable($form->{mypage})) {
+    if (not $self->is_editable($form->{mypage})) {
         return $self->forward( 'read' );
     }
     $self->open_diff;
@@ -1409,19 +1376,19 @@ sub do_rss {
     my $self = shift;
     if ($self->cfg('file_rss')) {
         $self->header_add(
-            -status => '301 Moved Permanently',
+            -status   => '301 Moved Permanently',
             -location => $self->cfg('modifier_rss_about'),
-            -type => q{},
+            -type     => q{},
         );
     }
 }
 
 sub is_exist_page {
-    my ($name) = @_;
-    if ($use_exists) {
-        return exists($database{$name});
+    my ($self, $name) = @_;
+    if ($self->cfg('use_exists')) {
+        return exists($self->database->{$name});
     } else {
-        return $database{$name};
+        return $self->database->{$name};
     }
 }
 
@@ -1445,6 +1412,15 @@ sub print_plugin_log {
     if ($plugin_context->{debug}) {
         print "<pre>(print_plugin_log)\n", join("\n", @{$plugin_manager->{log}}), "</pre>";
     }
+}
+
+sub render_plugin_log {
+    my $self = shift;
+    if ($plugin_context->{debug}) {
+        my $log = $self->plugin_manager->{log};
+        return "<pre>(print_plugin_log)\n" . join("\n", @{$log}) . "</pre>";
+    }
+    return q{};
 }
 
 sub keyword_reject {
@@ -1472,7 +1448,7 @@ sub update_rssfile {
     my $modifier_rss_timezone = $self->cfg('modifier_rss_timezone');
     my $rss = new YukiWiki::RSS(
         version => '1.0',
-        encoding => $charset,
+        encoding => $self->param('charset'),
     );
     $rss->channel(
         title => $self->cfg('modifier_rss_title'),
@@ -1489,7 +1465,7 @@ sub update_rssfile {
         my $title = &unarmor_name($3);
         my $escaped_title = YukiWiki::Util::escape($title);
         my $link = $modifier_rss_link . '?' . YukiWiki::Util::encode($title);
-        my $description = $escaped_title . &escape(&get_subjectline($title));
+        my $description = $escaped_title . &escape($self->get_subjectline($title));
         $rss->add_item(
             title => $escaped_title,
             link  => $link,
@@ -1499,7 +1475,7 @@ sub update_rssfile {
         $count++;
     }
     my $file_rss = $self->cfg('file_rss');
-    open(FILE, "> $file_rss") or &print_error("($file_rss)");
+    open(FILE, "> $file_rss") or die "($file_rss)";
     print FILE $rss->as_string;
     close(FILE);
 }

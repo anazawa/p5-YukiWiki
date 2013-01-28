@@ -63,11 +63,11 @@ LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0
 >>>LEVEL3
 END_INPUT
 
-YukiWiki->new( PARAMS => { cfg_file => 'config.pl' } )->setup;
+my $wiki = YukiWiki->new( PARAMS => { cfg_file => 'config.pl' } );
+$wiki->setup;
 
 open my $fh, '< t/converted.txt';
 my $expected = join q{}, <$fh>;
 close $fh;
 
-#eq_or_diff YukiWiki::text_to_html( $input, toc => 1 ), $expected;
-eq_or_diff YukiWiki::text_to_html( $input, toc => 1 ), $expected;
+eq_or_diff $wiki->text_to_html( $input, toc => 1 ), $expected;
