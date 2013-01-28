@@ -1,0 +1,65 @@
+<!DOCTYPE html
+    PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+    "http://www.w3.org/TR/html4/loose.dtd">
+<html lang="<TMPL_VAR NAME="lang">">
+<head>
+    <meta http-equiv="Content-Language" content="<TMPL_VAR NAME="lang">">
+    <meta http-equiv="Content-Type"
+        content="text/html; charset=<TMPL_VAR NAME="charset">">
+    <title>
+        <TMPL_VAR NAME="escapedpage">
+        <TMPL_VAR subjectline ESCAPE=HTML>
+    </title>
+    <link rel="index"
+        href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="IndexPage">">
+    <link rev="made" href="mailto:<TMPL_VAR NAME="modifier_mail">">
+    <link rel="stylesheet" type="text/css"
+        href="<TMPL_VAR NAME="url_stylesheet">">
+    <link rel="alternate" type="application/rss+xml" title="RSS"
+        href="<TMPL_VAR NAME="modifier_rss_about">" />
+</head>
+<body class="<TMPL_VAR NAME="bodyclass">">
+<div class="tools">
+    <TMPL_IF NAME="admineditable">
+    <a title="<TMPL_VAR NAME="admineditthispage">"
+        href="<TMPL_VAR NAME="url_cgi">?mycmd=adminedit&amp;mypage=<TMPL_VAR NAME="cookedpage">">
+        <TMPL_VAR NAME="admineditbutton">
+    </a> |
+    </TMPL_IF>
+    <TMPL_IF NAME="editable">
+    <a title="<TMPL_VAR NAME="editthispage">"
+        href="<TMPL_VAR NAME="url_cgi">?mycmd=edit&amp;mypage=<TMPL_VAR NAME="cookedpage">">
+        <TMPL_VAR NAME="editbutton">
+    </a> |
+    </TMPL_IF>
+    <TMPL_IF NAME="admineditable">
+    <a href="<TMPL_VAR NAME="url_cgi">?mycmd=diff&amp;mypage=<TMPL_VAR NAME="cookedpage">">
+        <TMPL_VAR NAME="diffbutton">
+    </a> |
+    </TMPL_IF>
+    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="CreatePage">">
+        <TMPL_VAR NAME="createbutton">
+    </a> | 
+    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="IndexPage">">
+        <TMPL_VAR NAME="indexbutton">
+    </a> | 
+    <a href="<TMPL_VAR NAME="modifier_rss_about">">
+        <TMPL_VAR NAME="rssbutton">
+    </a> | 
+    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="FrontPage">">
+        <TMPL_VAR NAME="FrontPage">
+    </a> | 
+    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="SearchPage">">
+        <TMPL_VAR NAME="searchbutton">
+    </a> | 
+    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR NAME="RecentChanges">">
+        <TMPL_VAR NAME="recentchangesbutton">
+    </a>
+</div>
+<h1 class="header">
+  <a
+    title="<TMPL_VAR NAME="searchthispage">"
+    href="<TMPL_VAR NAME="url_cgi">?mycmd=search&amp;mymsg=<TMPL_VAR NAME="cookedpage">">
+    <TMPL_VAR page ESCAPE=HTML></a>
+    <TMPL_VAR subjectline ESCAPE=HTML>
+</h1>

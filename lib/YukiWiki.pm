@@ -207,7 +207,7 @@ sub cgiapp_prerun {
     } elsif ($query =~ /^($wiki_name)$/) {
         $self->prerun_mode( $form{mycmd} = 'read' );
         $form{mypage} = $1;
-    } elsif ($database{$query}) {
+    } elsif ($self->database->{$query}) {
         $self->prerun_mode( $form{mycmd} = 'read' );
         $form{mypage} = $query;
     }
@@ -235,6 +235,18 @@ sub cgiapp_prerun {
         mypage    => $form{mypage},
         mypreview => $form{mypreview},
     );
+
+    $self->add_callback( 'load_tmpl' => \&load_tmpl_prerun );
+}
+
+sub load_tmpl_prerun {
+    my ( $self, $ht_params, $tmpl_params, $tmpl_file ) = @_;
+    $ht_params->{die_on_bad_params} = 0;
+    $tmpl_params->{VERSION} = $VERSION;
+    $tmpl_params->{lang} = $lang;
+    $tmpl_params->{charset} = $charset;
+    #$tmpl_params->{modifier_name} = $self->cfg('modifier_name');
+    #$tmpl_params->{icontag} = $self->cfg('icontag');
 }
 
 sub teardown {
@@ -245,9 +257,10 @@ sub teardown {
 sub do_read {
     my $self = shift;
     my $mypage = $self->param('mypage');
-    my $output = &print_header($mypage);
-    $output .= &print_content($self->param('database')->{$mypage});
-    $output .= &print_footer($mypage);
+    my $output = $self->render_header($mypage);
+    $output .= &print_content($self->database->{$mypage});
+    #$output .= &print_footer($mypage);
+    $output .= $self->render_footer($mypage);
     $output;
 }
 
@@ -257,7 +270,7 @@ sub do_edit {
     my $database = $self->param('database');
     my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
-    my $output = &print_header($page);
+    my $output = $self->render_header($page);
     if (not &is_editable($page)) {
         $output .= &print_message($resource->{cantchange});
     } elsif (&is_frozen($page)) {
@@ -275,7 +288,7 @@ sub do_adminedit {
     my $database = $self->param('database');
     my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
-    my $output = &print_header($page);
+    my $output = $self->render_header($page);
     if (not &is_editable($page)) {
         $output .= &print_message($resource->{cantchange});
     } else {
@@ -288,9 +301,9 @@ sub do_adminedit {
 
 sub do_adminchangepasswordform {
     my $self = shift;
-    my $output = &print_header($AdminChangePassword);
+    my $output = $self->render_header($AdminChangePassword);
     $output .= &print_passwordform;
-    $output .= &print_footer($AdminChangePassword);
+    $output .= $self->render_footer($AdminChangePassword);
     $output;
 }
 
@@ -319,18 +332,17 @@ EOD
     my $crypted = crypt($form->{mynewpassword}, "$salt1$salt2");
     &set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
 
-    my $output = &print_header($CompletedSuccessfully);
+    my $output = $self->render_header($CompletedSuccessfully);
     $output .= &print_message($resource->{passwordchanged});
-    $output .= &print_footer($CompletedSuccessfully);
+    $output .= $self->render_footer($CompletedSuccessfully);
     $output;
 }
 
 sub do_index {
     my $self = shift;
-    my $database = $self->param('database');
-    my $output = &print_header($IndexPage);
+    my $output = $self->render_header($IndexPage);
     $output .= qq(<ul>);
-    foreach my $page (sort keys %{$database}) {
+    foreach my $page (sort keys %{$self->database}) {
         if (&is_editable($page)) {
             $output .= qq(<li><a href="$url_cgi?@{[&encode($page)]}">@{[&escape($page)]}</a>@{[&escape(&get_subjectline($page))]}</li>);
             # print qq(<li>@{[&get_info($page, $info_IsFrozen)]}</li>);
@@ -363,9 +375,9 @@ sub do_write {
     }
 
     if (not &is_editable($mypage)) {
-        my $output = &print_header($mypage);
+        my $output = $self->render_header($mypage);
         $output .= &print_message($resource->{cantchange});
-        $output .= &print_footer($mypage);
+        $output .= $self->render_footer($mypage);
         return $output;
     }
 
@@ -378,7 +390,7 @@ sub do_write {
         $self->open_diff;
         my @msg1 = split(/\r?\n/, $database->{$mypage});
         my @msg2 = split(/\r?\n/, $form->{mymsg});
-        $diffbase{$mypage} = &difftext(\@msg1, \@msg2);
+        $self->diffbase->{$mypage} = &difftext(\@msg1, \@msg2);
         $self->close_diff;
     }
 
@@ -391,7 +403,7 @@ sub do_write {
             $self->update_recent_changes;
         }
         &set_info($mypage, $info_IsFrozen, 0 + $form->{myfrozen});
-        my $output = &print_header($CompletedSuccessfully);
+        my $output = $self->render_header($CompletedSuccessfully);
         $output .= &print_message($resource->{saved});
         $output .= &print_content(
             "$resource->{continuereading} @{[&armor_name($mypage)]}"
@@ -405,7 +417,7 @@ sub do_write {
         if ($form->{mytouch}) {
             $self->update_recent_changes;
         }
-        my $output = &print_header($mypage);
+        my $output = $self->render_header($mypage);
         $output .= &print_message($resource->{deleted});
         $output .= &print_footer($mypage);
         return $output;
@@ -414,16 +426,16 @@ sub do_write {
 
 sub do_searchform {
     my $self = shift;;
-    my $output = &print_header($SearchPage);
+    my $output = $self->render_header($SearchPage);
     $output .= &print_searchform("");
-    $output .= &print_footer($SearchPage);
+    $output .= $self->render_footer($SearchPage);
     $output;
 }
 
 sub do_search {
     my $self = shift;
     my $word = YukiWiki::Util::escape($form{mymsg});
-    my $output = &print_header($SearchPage);
+    my $output = $self->render_header($SearchPage);
     $output .= &print_searchform($word);
     my $counter = 0;
     foreach my $page (sort keys %database) {
@@ -441,14 +453,14 @@ sub do_search {
     } else {
         $output .= qq|</ul>|;
     }
-    $output .= &print_footer($SearchPage);
+    $output .= $self->render_footer($SearchPage);
     $output;
 }
 
 sub do_create {
     my $self = shift;
     my $resource = $self->param('resource');
-    my $output = &print_header($CreatePage);
+    my $output = $self->render_header($CreatePage);
     $output .= <<"EOD";
 <form action="$url_cgi" method="post">
     <input type="hidden" name="mycmd" value="edit">
@@ -457,7 +469,7 @@ sub do_create {
     <input type="submit" value="$resource->{createbutton}"><br>
 </form>
 EOD
-    $output .= &print_footer($CreatePage);
+    $output .= $self->render_footer($CreatePage);
     $output;
 }
 
@@ -469,9 +481,9 @@ sub do_FrontPage {
         my $content = join('', <FILE>);
         YukiWiki::Util::code_convert(\$content, $kanjicode);
         close(FILE);
-        my $output = &print_header($FrontPage);
+        my $output = $self->render_header($FrontPage);
         $output .= &print_content($content);
-        $output .= &print_footer($FrontPage);
+        $output .= $self->render_footer($FrontPage);
         return $output;
     } else {
         $form{mycmd} = 'read';
@@ -491,11 +503,65 @@ sub print_error {
 
 sub do_error {
     my ( $self, $msg ) = @_;
-    my $output = &print_header($ErrorPage);
+    my $output = $self->render_header($ErrorPage);
     $output .= qq(<p><strong class="error">$msg</strong></p>);
     $output .= &print_plugin_log;
-    $output .= &print_footer($ErrorPage);
+    $output .= $self->render_footer($ErrorPage);
     $output;
+}
+
+sub render_header {
+    my ($self, $page) = @_;
+    my $tmpl = $self->load_tmpl('head.html');
+    my $bodyclass = "normal";
+    my $editable = 0;
+    my $admineditable = 0;
+    if (&is_frozen($page) and $form{mycmd} =~ /^(read|write)$/) {
+        $editable = 0;
+        $admineditable = 1;
+        $bodyclass = "frozen";
+    } elsif (&is_editable($page) and $form{mycmd} =~ /^(read|write)$/) {
+        $admineditable = 1;
+        $editable = 1;
+    } else {
+        $editable = 0;
+    }
+    my $cookedpage = YukiWiki::Util::encode($page);
+    my $escapedpage = YukiWiki::Util::escape($page);
+    my $resource = $self->param('resource');
+
+    $tmpl->param(
+        IndexPage            => $IndexPage,
+        CreatePage           => $CreatePage,
+        SearchPage           => $SearchPage,
+        FrontPage            => $FrontPage,
+        RecentChanges        => $RecentChanges,
+        page                 => $page,
+        subjectline          => &get_subjectline($page),
+        escapedpage          => $escapedpage,
+        bodyclass            => $bodyclass,
+        admineditable        => $admineditable,
+        cookedpage           => $cookedpage,
+        editable             => $editable,
+        url_cgi              => $self->cfg('url_cgi'),
+        modifier_mail        => $self->cfg('modifier_mail'),
+        url_stylesheet       => $self->cfg('url_stylesheet'),
+        modifier_rss_about   => $self->cfg('modifier_rss_about'),
+        admineditthispage    => $resource->{admineditthispage},
+        admineditbutton      => $resource->{admineditbutton},
+        editthispage         => $resource->{editthispage},
+        editbutton           => $resource->{editbutton},
+        diffbutton           => $resource->{diffbutton},
+        createbutton         => $resource->{createbutton},
+        indexbutton          => $resource->{indexbutton},
+        rssbutton            => $resource->{rssbutton},
+        searchbutton         => $resource->{searchbutton},
+        recentchangesbutton  => $resource->{recentchangesbutton},
+        searchthispagebutton => $resource->{searchthispagebutton},
+    );
+
+    $tmpl->output;
+
 }
 
 sub print_header {
@@ -570,6 +636,21 @@ sub print_footer {
 </body>
 </html>
 EOD
+}
+
+sub render_footer {
+    my $self = shift;
+    my $page = shift;
+    my $tmpl = $self->load_tmpl('foot.html');
+
+    $tmpl->param(
+        page          => $page,
+        modifier_url  => $self->cfg('modifier_url'),
+        modifier_name => $self->cfg('modifier_name'),
+        icontag       => $self->cfg('icontag'),
+    );
+
+    $tmpl->output;
 }
 
 sub print_content {
@@ -926,6 +1007,9 @@ sub close_db {
     $self->delete('infobase');
 }
 
+sub database { $_[0]->param('database') }
+sub infobase { $_[0]->param('infobase') }
+
 sub open_diff {
     my $self = shift;
     my $modifier_dbtype = $self->cfg('modifier_dbtype');
@@ -938,6 +1022,7 @@ sub open_diff {
         tie(%diffbase, "YukiWiki::DB", $diffname) or
         die "(tie YukiWiki::DB) $diffname";
     }
+    $self->param( diffbase => \%diffbase );
 }
 
 sub close_diff {
@@ -950,7 +1035,10 @@ sub close_diff {
     } else {
         untie(%diffbase);
     }
+    $self->delete( 'diffbase' );
 }
+
+sub diffbase { $_[0]->param('diffbase') }
 
 sub print_searchform {
     my ($word) = @_;
@@ -1134,17 +1222,17 @@ sub conflict {
     my $content = join('', <FILE>);
     YukiWiki::Util::code_convert(\$content, $kanjicode);
     close(FILE);
-    my $output = &print_header($page);
+    my $output = $self->render_header($page);
     $output .= &print_content($content);
     $output .= &print_editform($rawmsg, $form->{myConflictChecker}, frozen=>0, conflict=>1);
-    $output .= &print_footer($page);
+    $output .= $self->render_footer($page);
     return $output;
 }
 
 # [[YukiWiki http://www.hyuki.com/yukiwiki/wiki.cgi?euc($1)]]
 sub init_InterWikiName {
     my $self = shift;
-    my $content = $self->param('database')->{$InterWikiName};
+    my $content = $self->database->{$InterWikiName} || q{};
     while ($content =~ /\[\[(\S+) +(\S+)\]\]/g) {
         my ($name, $url) = ($1, $2);
         $interwiki{$name} = $url;
@@ -1239,7 +1327,7 @@ sub is_frozen {
 
 sub do_comment {
     my $self = shift;
-    my ($content) = $self->param('database')->{$form{mypage}};
+    my ($content) = $self->database->{$form{mypage}};
     my $datestr = YukiWiki::Util::get_now();
     my $namestr = $form{myname} ? " ''[[$form{myname}]]'' : " : " ";
     if ($content =~ s/(^|\n)(\Q$embed_comment\E)/$1- $datestr$namestr$form{mymsg}\n$2/) {
@@ -1288,8 +1376,8 @@ sub do_diff {
     }
     $self->open_diff;
     my $title = $form->{mypage};
-    my $output = &print_header($title);
-    $_ = YukiWiki::Util::escape($diffbase{$form->{mypage}});
+    my $output = $self->render_header($title);
+    $_ = YukiWiki::Util::escape($self->diffbase->{$form->{mypage}});
     $self->close_diff;
     $output .= qq(<h3>$resource->{difftitle}</h3>);
     $output .= qq($resource->{diffnotice});
@@ -1307,7 +1395,7 @@ sub do_diff {
     }
     $output .= qq(</pre>);
     $output .= qq(<hr>);
-    $output .= &print_footer($title);
+    $output .= $self->render_footer($title);
     $output;
 }
 
@@ -1382,7 +1470,7 @@ sub update_rssfile {
         about  => $self->cfg('modifier_rss_about'),
         description => $self->cfg('modifier_rss_description'),
     );
-    my $recentchanges = $self->param('database')->{$RecentChanges};
+    my $recentchanges = $self->database->{$RecentChanges};
     my $count = 0;
     foreach (split(/\n/, $recentchanges)) {
         last if ($count >= 15);
