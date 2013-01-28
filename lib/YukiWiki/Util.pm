@@ -2,6 +2,7 @@ package YukiWiki::Util;
 use strict;
 use warnings;
 use Exporter 'import';
+use Jcode;
 
 our @EXPORT_OK = qw(
     escape unescape

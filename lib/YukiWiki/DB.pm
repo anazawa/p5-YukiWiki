@@ -1,4 +1,4 @@
-package YukiWiki::YukiWikiDB;
+package YukiWiki::DB;
 
 use strict;
 use Fcntl ':flock';
