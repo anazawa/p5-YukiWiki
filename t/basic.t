@@ -3,7 +3,7 @@ use warnings;
 use Test::More tests => 2;
 use YukiWiki;
 
-my $wiki = YukiWiki->new;
+my $wiki = YukiWiki->new( PARAMS => { cfg_file => 'config.pl' } );
 
 isa_ok $wiki, 'YukiWiki';
 

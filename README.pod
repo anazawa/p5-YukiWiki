@@ -1,0 +1,37 @@
+=head1 NAME
+
+  YukiWiki built upon CGI::Application
+
+=head1 SYNOPSIS
+
+  #!/usr/bin/env perl
+  use YukiWiki;
+  YukiWiki->new->run;
+
+=head1 DESCRIPTION
+
+YukiWiki is yet another Wiki clone.
+
+YukiWiki can treat Japanese WikiNames (enclosed with [[ and ]]).
+YukiWiki provides 'InterWiki' feature, RDF Site Summary (RSS),
+and some embedded commands (such as [[#comment]] to add comments).
+
+=head1 DEPENDENCIES
+
+L<CGI::Application>,
+L<CGI::Application::Plugin::Forward>,
+L<CGI::Application::Plugin::AutoConfig>
+
+=head1 SEE ALSO
+
+http://www.hyuki.com/yukiwiki/
+
+=head1 MODIFIER
+
+Ryo Anazawa
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+

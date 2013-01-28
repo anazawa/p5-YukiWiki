@@ -16,6 +16,7 @@ use warnings;
 use lib qw(lib);
 use parent 'CGI::Application';
 use CGI::Application::Plugin::Forward;
+use CGI::Application::Plugin::ConfigAuto qw/cfg/;
 use CGI::Carp qw(fatalsToBrowser);
 use Fcntl;
 use YukiWiki::RSS;
@@ -36,43 +37,43 @@ my $modifier_url = 'http://www.hyuki.com/';
 my $modifier_name = 'Hiroshi Yuki';
 my $modifier_dir_data = '.'; # Your data directory (not URL, but DIRECTORY).
 my $modifier_url_data = '.'; # Your data URL (not DIRECTORY, but URL).
-my $modifier_rss_title = "YukiWiki $VERSION";
-my $modifier_rss_link = 'http://www.hyuki.com/yukiwiki/wiki.cgi';
+#my $modifier_rss_title = "YukiWiki $VERSION";
+#my $modifier_rss_link = 'http://www.hyuki.com/yukiwiki/wiki.cgi';
 my $modifier_rss_about = 'http://www.hyuki.com/yukiwiki/rss.xml';
-my $modifier_rss_description = 'This is YukiWiki, yet another Wiki clone';
-my $modifier_rss_timezone = '+09:00';
+#my $modifier_rss_description = 'This is YukiWiki, yet another Wiki clone';
+#my $modifier_rss_timezone = '+09:00';
 ##############################
 #
 # You MAY modify following variables.
 #
-my $modifier_dbtype = 'YukiWikiDB';
-my $modifier_sendmail = '';
+#my $modifier_dbtype = 'YukiWikiDB';
+#my $modifier_sendmail = '';
 # my $modifier_sendmail = '/usr/sbin/sendmail -t -n';
 my $modifier_dir_plugin = './plugin';
 ##############################
 #
 # You MAY modify following variables.
 #
-my $file_touch = "$modifier_dir_data/touched.txt";
-my $file_resource = "$modifier_dir_data/resource.txt";
-my $file_FrontPage = "$modifier_dir_data/frontpage.txt";
-my $file_conflict = "$modifier_dir_data/conflict.txt";
+#my $file_touch = "$modifier_dir_data/touched.txt";
+#my $file_resource = "$modifier_dir_data/resource.txt";
+#my $file_FrontPage = "$modifier_dir_data/frontpage.txt";
+#my $file_conflict = "$modifier_dir_data/conflict.txt";
 my $file_format = "$modifier_dir_data/format.txt";
-my $file_rss = "$modifier_dir_data/rss.xml";
+#my $file_rss = "$modifier_dir_data/rss.xml";
 my $url_cgi = 'wiki.cgi';
 my $url_stylesheet = "$modifier_url_data/wiki.css";
 my $icontag = qq(<img src="$modifier_url_data/icon40x40.gif" alt="*" width="40" height="40" />);
-my $maxrecent = 50;
-my $max_message_length = 500_000; # -1 for unlimited.
+#my $maxrecent = 50;
+#my $max_message_length = 500_000; # -1 for unlimited.
 my $cols = 80;
 my $rows = 20;
 ##############################
 #
 # You MAY modify following variables.
 # 
-my $dataname = "$modifier_dir_data/wiki";
-my $infoname = "$modifier_dir_data/info";
-my $diffname = "$modifier_dir_data/diff";
+#my $dataname = "$modifier_dir_data/wiki";
+#my $infoname = "$modifier_dir_data/info";
+#my $diffname = "$modifier_dir_data/diff";
 my $editchar = '?';
 my $subject_delimiter = ' - ';
 my $use_autoimg = 1; # automatically convert image URL into <img> tag.
@@ -153,7 +154,6 @@ sub setup {
     $self->init_resource;
     # &check_modifiers;
     $self->open_db;
-    #$self->init_form;
     $self->init_InterWikiName;
     $self->init_plugin;
 
@@ -184,11 +184,6 @@ sub setup {
 
     return;
 }
-
-#sub cgiapp_prerun {
-#    my $self = shift;
-#    $self->prerun_mode( $self->param('form')->{mycmd} );
-#}
 
 sub cgiapp_prerun {
     my $self = shift;
@@ -233,6 +228,13 @@ sub cgiapp_prerun {
 
     $form{mymsg} = YukiWiki::Util::code_convert(\$form{mymsg}, $kanjicode);
     $form{myname} = YukiWiki::Util::code_convert(\$form{myname}, $kanjicode);
+
+    $self->param(
+        mymsg     => $form{mymsg},
+        myname    => $form{myname},
+        mypage    => $form{mypage},
+        mypreview => $form{mypreview},
+    );
 }
 
 sub teardown {
@@ -242,7 +244,7 @@ sub teardown {
 
 sub do_read {
     my $self = shift;
-    my $mypage = $self->param('form')->{mypage};
+    my $mypage = $self->param('mypage');
     my $output = &print_header($mypage);
     $output .= &print_content($self->param('database')->{$mypage});
     $output .= &print_footer($mypage);
@@ -253,7 +255,7 @@ sub do_edit {
     my $self = shift;
     my $resource = $self->param('resource');
     my $database = $self->param('database');
-    my $mypage = $self->param('form')->{mypage};
+    my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = &print_header($page);
     if (not &is_editable($page)) {
@@ -271,7 +273,7 @@ sub do_adminedit {
     my $self = shift;
     my $resource = $self->param('resource');
     my $database = $self->param('database');
-    my $mypage = $self->param('form')->{mypage};
+    my $mypage = $self->param('mypage');
     my ($page) = &unarmor_name(&armor_name($mypage));
     my $output = &print_header($page);
     if (not &is_editable($page)) {
@@ -295,16 +297,17 @@ sub do_adminchangepasswordform {
 sub do_adminchangepassword {
     my $self = shift;
     my $resource = $self->param('resource');
-    if ($form{mynewpassword} ne $form{mynewpassword2}) {
+    my $form = $self->param('form');
+    if ($form->{mynewpassword} ne $form->{mynewpassword2}) {
         die $resource->{passwordmismatcherror};
     }
     my ($validpassword_crypt) = &get_info($AdminSpecialPage, $info_AdminPassword);
     if ($validpassword_crypt) {
-        if (not $self->valid_password($form{myoldpassword})) {
+        if (not $self->valid_password($form->{myoldpassword})) {
             $self->send_mail_to_admin(<<"EOD", "AdminChangePassword");
-myoldpassword=$form{myoldpassword}
-mynewpassword=$form{mynewpassword}
-mynewpassword2=$form{mynewpassword2}
+myoldpassword=$form->{myoldpassword}
+mynewpassword=$form->{mynewpassword}
+mynewpassword2=$form->{mynewpassword2}
 EOD
             die $resource->{passworderror};
         }
@@ -313,7 +316,7 @@ EOD
     my (@token) = ('0'..'9', 'A'..'Z', 'a'..'z');
     my $salt1 = $token[(time | $$) % scalar(@token)];
     my $salt2 = $token[($sec + $min*60 + $hour*60*60) % scalar(@token)];
-    my $crypted = crypt($form{mynewpassword}, "$salt1$salt2");
+    my $crypted = crypt($form->{mynewpassword}, "$salt1$salt2");
     &set_info($AdminSpecialPage, $info_AdminPassword, $crypted);
 
     my $output = &print_header($CompletedSuccessfully);
@@ -345,6 +348,7 @@ sub do_write {
     my $database = $self->param('database');
     my $infobase = $self->param('infobase');
     my $form     = $self->param('form');
+    my $mypage   = $self->param('mypage');
 
     if ($self->keyword_reject()) {
         return;
@@ -358,52 +362,52 @@ sub do_write {
         return;
     }
 
-    if (not &is_editable($form->{mypage})) {
-        my $output = &print_header($form->{mypage});
+    if (not &is_editable($mypage)) {
+        my $output = &print_header($mypage);
         $output .= &print_message($resource->{cantchange});
-        $output .= &print_footer($form->{mypage});
+        $output .= &print_footer($mypage);
         return $output;
     }
 
-    if (my $output = $self->conflict($form->{mypage}, $form->{mymsg})) {
+    if (my $output = $self->conflict($mypage, $form->{mymsg})) {
         return $output;
     }
 
     # Making diff
     if (1) {
         $self->open_diff;
-        my @msg1 = split(/\r?\n/, $database->{$form->{mypage}});
+        my @msg1 = split(/\r?\n/, $database->{$mypage});
         my @msg2 = split(/\r?\n/, $form->{mymsg});
-        $diffbase{$form->{mypage}} = &difftext(\@msg1, \@msg2);
+        $diffbase{$mypage} = &difftext(\@msg1, \@msg2);
         $self->close_diff;
     }
 
     if ($form->{mymsg}) {
-        $database->{$form->{mypage}} = $form->{mymsg};
-        $self->send_mail_to_admin($form->{mypage}, "Modify");
-        &set_info($form->{mypage}, $info_ConflictChecker, '' . localtime);
+        $database->{$mypage} = $form->{mymsg};
+        $self->send_mail_to_admin($mypage, "Modify");
+        &set_info($mypage, $info_ConflictChecker, '' . localtime);
         if ($form->{mytouch}) {
-            &set_info($form->{mypage}, $info_LastModified, '' . localtime);
+            &set_info($mypage, $info_LastModified, '' . localtime);
             $self->update_recent_changes;
         }
-        &set_info($form->{mypage}, $info_IsFrozen, 0 + $form->{myfrozen});
+        &set_info($mypage, $info_IsFrozen, 0 + $form->{myfrozen});
         my $output = &print_header($CompletedSuccessfully);
         $output .= &print_message($resource->{saved});
         $output .= &print_content(
-            "$resource->{continuereading} @{[&armor_name($form->{mypage})]}"
+            "$resource->{continuereading} @{[&armor_name($mypage)]}"
         );
         $output .= &print_footer($CompletedSuccessfully);
         return $output;
     } else {
-        $self->send_mail_to_admin($form->{mypage}, "Delete");
-        delete $database->{$form->{mypage}};
-        delete $infobase->{$form->{mypage}};
+        $self->send_mail_to_admin($mypage, "Delete");
+        delete $database->{$mypage};
+        delete $infobase->{$mypage};
         if ($form->{mytouch}) {
             $self->update_recent_changes;
         }
-        my $output = &print_header($form->{mypage});
+        my $output = &print_header($mypage);
         $output .= &print_message($resource->{deleted});
-        $output .= &print_footer($form->{mypage});
+        $output .= &print_footer($mypage);
         return $output;
     }
 }
@@ -460,6 +464,7 @@ EOD
 sub do_FrontPage {
     my $self = shift;
     if ($fixedpage{$FrontPage}) {
+        my $file_FrontPage = $self->cfg('file_FrontPage');
         open(FILE, $file_FrontPage) or die "($file_FrontPage)";
         my $content = join('', <FILE>);
         YukiWiki::Util::code_convert(\$content, $kanjicode);
@@ -470,7 +475,7 @@ sub do_FrontPage {
         return $output;
     } else {
         $form{mycmd} = 'read';
-        $form{mypage} = $FrontPage;
+        $self->param( mypage => $form{mypage} = $FrontPage );
         return $self->forward( 'read' );
     }
 }
@@ -794,27 +799,34 @@ sub print_message {
 
 sub update_recent_changes {
     my $self = shift;
-    my $update = "- @{[&get_now]} @{[&armor_name($form{mypage})]} @{[&get_subjectline($form{mypage})]}";
-    my @oldupdates = split(/\r?\n/, $database{$RecentChanges});
+    my $mypage = $self->param('mypage');
+    my $database = $self->param('database');
+    my $update = join(' ',
+        '-',
+        &get_now,
+        &armor_name($mypage),
+        &get_subjectline($mypage),
+    );
+    my @oldupdates = split(/\r?\n/, $database->{$RecentChanges});
     my @updates;
     foreach (@oldupdates) {
         /^\- \d\d\d\d\-\d\d\-\d\d \(...\) \d\d:\d\d:\d\d (\S+)/;    # date format.
         my $name = &unarmor_name($1);
-        if (&is_exist_page($name) and ($name ne $form{mypage})) {
+        if (&is_exist_page($name) and ($name ne $mypage)) {
             push(@updates, $_);
         }
     }
-    if (&is_exist_page($form{mypage})) {
+    if (&is_exist_page($mypage)) {
         unshift(@updates, $update);
     }
-    splice(@updates, $maxrecent + 1);
-    $database{$RecentChanges} = join("\n", @updates);
-    if ($file_touch) {
+    splice(@updates, $self->cfg('maxrecent') + 1);
+    $database->{$RecentChanges} = join("\n", @updates);
+    if (my $file_touch = $self->cfg('file_touch')) {
         open(FILE, "> $file_touch");
         print FILE localtime() . "\n";
         close(FILE);
     }
-    if ($file_rss) {
+    if ($self->cfg('file_rss')) {
         $self->update_rssfile;
     }
 }
@@ -839,7 +851,12 @@ sub get_subjectline {
 
 sub send_mail_to_admin {
     my ($self, $page, $mode) = @_;
+    my $modifier_sendmail = $self->cfg('modifier_sendmail');
     return unless $modifier_sendmail;
+    my $remote_addr = $self->query->remote_addr;
+    my $remote_host = $self->query->remote_host;
+    my $database = $self->param('database');
+    my $modifier_mail = $self->cfg('modifier_mail');
     my $message = <<"EOD";
 To: $modifier_mail
 From: $modifier_mail
@@ -850,12 +867,12 @@ Content-Transfer-Encoding: 7bit
 
 --------
 MODE = $mode
-REMOTE_ADDR = $ENV{REMOTE_ADDR}
-REMOTE_HOST = $ENV{REMOTE_HOST}
+REMOTE_ADDR = $remote_addr
+REMOTE_HOST = $remote_host
 --------
 $page
 --------
-$database{$page}
+$database->{$page}
 --------
 EOD
     YukiWiki::Util::code_convert(\$message, 'jis');
@@ -866,6 +883,9 @@ EOD
 
 sub open_db {
     my $self = shift;
+    my $modifier_dbtype = $self->cfg('modifier_dbtype');
+    my $dataname = $self->cfg('dataname');
+    my $infoname = $self->cfg('infoname');
 
     if ($modifier_dbtype eq 'dbmopen') {
         dbmopen(%database, $dataname, 0666) or &print_error("(dbmopen) $dataname");
@@ -889,6 +909,7 @@ sub open_db {
 
 sub close_db {
     my $self = shift;
+    my $modifier_dbtype = $self->cfg('modifier_dbtype');
 
     if ($modifier_dbtype eq 'dbmopen') {
         dbmclose(%database);
@@ -907,6 +928,8 @@ sub close_db {
 
 sub open_diff {
     my $self = shift;
+    my $modifier_dbtype = $self->cfg('modifier_dbtype');
+    my $diffname = $self->cfg('diffname');
     if ($modifier_dbtype eq 'dbmopen') {
         dbmopen(%diffbase, $diffname, 0666) or die "(dbmopen) $diffname";
     } elsif ($modifier_dbtype eq 'AnyDBM_File') {
@@ -919,6 +942,7 @@ sub open_diff {
 
 sub close_diff {
     my $self = shift;
+    my $modifier_dbtype = $self->cfg('modifier_dbtype');
     if ($modifier_dbtype eq 'dbmopen') {
         dbmclose(%diffbase);
     } elsif ($modifier_dbtype eq 'AnyDBM_File') {
@@ -1090,7 +1114,7 @@ sub is_bracket_name {
 sub init_resource {
     my $self = shift;
     $self->param( resource => \%resource );
-    open(FILE, $file_resource) or &print_error("(resource)");
+    open(FILE, $self->cfg('file_resource')) or &print_error("(resource)");
     while (<FILE>) {
         chomp;
         next if /^#/;
@@ -1106,7 +1130,7 @@ sub conflict {
     if ($form->{myConflictChecker} eq &get_info($page, $info_ConflictChecker)) {
         return 0;
     }
-    open(FILE, $file_conflict) or die "(conflict)";
+    open(FILE, $self->cfg('file_conflict')) or die "(conflict)";
     my $content = join('', <FILE>);
     YukiWiki::Util::code_convert(\$content, $kanjicode);
     close(FILE);
@@ -1183,6 +1207,7 @@ sub frozen_reject {
 
 sub length_reject {
     my $self = shift;
+    my $max_message_length = $self->cfg('max_message_length');
     if ($max_message_length < 0) {
         return 0;
     }
@@ -1288,10 +1313,10 @@ sub do_diff {
 
 sub do_rss {
     my $self = shift;
-    if ($file_rss) {
+    if ($self->cfg('file_rss')) {
         $self->header_add(
             -status => '301 Moved Permanently',
-            -location => $modifier_rss_about,
+            -location => $self->cfg('modifier_rss_about'),
             -type => q{},
         );
     }
@@ -1345,17 +1370,19 @@ ultram.online-buy.com
 # Thanks to Makio Tsukamoto for dc_date.
 sub update_rssfile {
     my $self = shift;
+    my $modifier_rss_link = $self->cfg('modifier_rss_link');
+    my $modifier_rss_timezone = $self->cfg('modifier_rss_timezone');
     my $rss = new YukiWiki::RSS(
         version => '1.0',
         encoding => $charset,
     );
     $rss->channel(
-        title => $modifier_rss_title,
+        title => $self->cfg('modifier_rss_title'),
         link  => $modifier_rss_link,
-        about  => $modifier_rss_about,
-        description => $modifier_rss_description,
+        about  => $self->cfg('modifier_rss_about'),
+        description => $self->cfg('modifier_rss_description'),
     );
-    my $recentchanges = $database{$RecentChanges};
+    my $recentchanges = $self->param('database')->{$RecentChanges};
     my $count = 0;
     foreach (split(/\n/, $recentchanges)) {
         last if ($count >= 15);
@@ -1373,6 +1400,7 @@ sub update_rssfile {
         );
         $count++;
     }
+    my $file_rss = $self->cfg('file_rss');
     open(FILE, "> $file_rss") or &print_error("($file_rss)");
     print FILE $rss->as_string;
     close(FILE);

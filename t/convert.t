@@ -63,7 +63,7 @@ LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0
 >>>LEVEL3
 END_INPUT
 
-YukiWiki->new->setup;
+YukiWiki->new( PARAMS => { cfg_file => 'config.pl' } )->setup;
 
 open my $fh, '< t/converted.txt';
 my $expected = join q{}, <$fh>;
