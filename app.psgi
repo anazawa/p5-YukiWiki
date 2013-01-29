@@ -1,14 +1,19 @@
 use strict;
 use warnings;
 use lib 'lib';
+use CGI::Application::Emulate::PSGI;
 use Plack::Builder;
 use YukiWiki;
 
-my $app = YukiWiki->psgi_app({
-    TMPL_PATH => 'tmpl/',
-    PARAMS => {
-        cfg_file => 'config.pl',
-    },
+my $app = CGI::Application::Emulate::PSGI->handler(sub {
+    my $wiki = YukiWiki->new(
+        TMPL_PATH => 'tmpl/',
+        PARAMS => {
+            cfg_file => 'config.pl',
+        },
+    );
+
+    $wiki->run;
 });
 
 builder {

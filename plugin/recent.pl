@@ -5,11 +5,10 @@ package recent;
 sub plugin_block {
     my ($escaped_argument, $context) = @_;
     my ($count) = split(/,/, $escaped_argument);
-    my @raw_recent_changes = split(/\n/, $context->{database}->{RecentChanges});
+    my @raw_recent_changes = split(/\n/, $context->database->{RecentChanges});
     my @recent_changes = splice(@raw_recent_changes, 0, $count);
     my $recent_changes = join("\n", @recent_changes);
-    #my $result = &main::text_to_html($recent_changes, toc=>0);
-    my $result = $recent_changes;
+    my $result = $context->text_to_html($recent_changes, toc=>0);
     return $result;
 }
 
