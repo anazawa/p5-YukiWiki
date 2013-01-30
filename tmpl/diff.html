@@ -1,0 +1,16 @@
+<h3><TMPL_VAR NAME="difftitle"></h3>
+<TMPL_VAR NAME="diffnotice">
+<p class="diff">
+<TMPL_LOOP NAME="lines">
+    <TMPL_IF NAME="is_added">
+        <b class="added"><TMPL_VAR NAME="line"></b><br>
+    <TMPL_ELSE><TMPL_IF NAME="is_deleted">
+        <s class="deleted"><TMPL_VAR NAME="line"></s><br>
+    <TMPL_ELSE><TMPL_IF NAME="is_same">
+        <span class="same"><TMPL_VAR NAME="line"></span><br>
+    <TMPL_ELSE>
+        ??? <TMPL_VAR NAME="line"><br>
+    </TMPL_IF></TMPL_IF></TMPL_IF>
+</TMPL_LOOP>
+</p>
+<hr>
