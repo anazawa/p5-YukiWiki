@@ -1,7 +1,7 @@
 <ul>
 <TMPL_LOOP NAME="pages">
   <li>
-    <a href="<TMPL_VAR NAME="url_cgi">?<TMPL_VAR page ESCAPE=HTML>">
+    <a href="<TMPL_VAR NAME="url_cgi">/<TMPL_VAR page ESCAPE=HTML>">
       <TMPL_VAR page ESCAPE=HTML>
     </a>
     <TMPL_VAR subjectline ESCAPE=HTML>

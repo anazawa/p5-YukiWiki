@@ -1,4 +1,18 @@
-<form action="<TMPL_VAR NAME="url_cgi">" method="post">
+<TMPL_IF NAME="mypreview">
+  <TMPL_IF NAME="mymsg">
+    <TMPL_UNLESS NAME="conflict">
+      <h3><TMPL_VAR NAME="previewtitle"></h3>
+      <TMPL_VAR NAME="previewnotice">
+      <div class="preview">
+        <TMPL_VAR NAME="renderedmymsg">
+      </div>
+    </TMPL_UNLESS>
+  <TMPL_ELSE>
+    <TMPL_VAR NAME="previewempty">
+  </TMPL_IF>
+</TMPL_IF>
+
+<form action="<TMPL_VAR NAME="url_cgi">/" method="post">
     <TMPL_IF NAME="admin">
     <TMPL_VAR NAME="frozenpassword">
     <input type="password" name="mypassword"
