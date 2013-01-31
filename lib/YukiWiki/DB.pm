@@ -2,6 +2,7 @@ package YukiWiki::DB;
 
 use strict;
 use Fcntl ':flock';
+use Carp;
 
 # Constructor
 sub new {
@@ -17,7 +18,7 @@ sub TIEHASH {
     };
     if (not -d $self->{dir}) {
         if (!mkdir($self->{dir}, 0777)) {
-            die "mkdir(" . $self->{dir} . ") fail";
+            croak "mkdir(" . $self->{dir} . ") fail";
         }
     }
     return bless($self, $class);

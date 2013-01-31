@@ -15,31 +15,33 @@ my $DEBUG = 0;
 # Constructor of Yuki::PluginManager.
 #
 sub new {
-    my ($class, $context, @dirs) = @_;
+    my ( $class, $context, @dirs ) = @_;
+
+
+    # Search for plugins.
+    my ( %pluginname_to_filename, @filter );
+    for my $dir ( @dirs ) {
+        for my $file ( sort glob("$dir/*.pl") ) {
+            next unless -e $file;
+            my $plugin = $file;
+            $plugin =~ s/.*?(\w+?)\.pl$/$1/;
+            $pluginname_to_filename{ $plugin } = $file;
+            push @filter, $plugin if $plugin =~ /^filter_/;
+        }
+    }
+
     my $self = {
         # Maps plugin name to its filename.
-        pluginname_to_filename => {},
+        pluginname_to_filename => \%pluginname_to_filename,
         # Listing of filter type plugins.
-        filter => [],
+        filter => \@filter,
         # Logs.
         log => [],
         # Plugin context given by YukiWiki plugin.
         context => $context,
     };
-    # Search for plugins.
-    for my $dir (@dirs) {
-        for my $file (sort glob("$dir/*.pl")) {
-            if (-e($file)) {
-                my $plugin = $file;
-                $plugin =~ s/.*?(\w+?)\.pl$/$1/;
-                $self->{pluginname_to_filename}->{$plugin} = $file;
-                if ($plugin =~ /^filter_/) {
-                    push(@{$self->{filter}}, $plugin);
-                }
-            }
-        }
-    }
-    return bless $self, $class;
+
+    bless $self, $class;
 }
 
 # Calls plugin.

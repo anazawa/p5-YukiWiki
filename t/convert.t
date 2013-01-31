@@ -63,7 +63,7 @@ LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0LEVEL0
 >>>LEVEL3
 END_INPUT
 
-my $wiki = YukiWiki->new( PARAMS => { cfg_file => 'config.pl' } );
+my $wiki = YukiWiki->new( PARAMS => { cfg_file => './t/config.pl' } );
 $wiki->setup;
 
 open my $fh, '< t/converted.txt';

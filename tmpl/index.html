@@ -1,10 +1,12 @@
 <ul>
 <TMPL_LOOP NAME="pages">
+<TMPL_IF NAME="is_editable">
   <li>
-    <a href="<TMPL_VAR NAME="url_cgi">/<TMPL_VAR page ESCAPE=HTML>">
-      <TMPL_VAR page ESCAPE=HTML>
+    <a href="<TMPL_VAR NAME="url_cgi">/<TMPL_VAR name ESCAPE=HTML>">
+      <TMPL_VAR name ESCAPE=HTML>
     </a>
     <TMPL_VAR subjectline ESCAPE=HTML>
   </li>
+</TMPL_IF>
 </TMPL_LOOP>
 </ul>
