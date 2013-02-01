@@ -111,7 +111,9 @@ sub usage {
 }
 
 1;
+
 __END__
+
 =head1 NAME
 
 Yuki::PluginManager - Manages installed YukiWiki plugins.

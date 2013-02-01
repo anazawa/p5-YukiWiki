@@ -1,12 +1,13 @@
 use strict;
 use warnings;
-use Test::More tests => 11;
+use Test::More tests => 12;
 
 BEGIN {
     use_ok 'Algorithm::Diff';
     use_ok 'YukiWiki';
     use_ok 'YukiWiki::DB';
     use_ok 'YukiWiki::DiffText';
+    use_ok 'YukiWiki::Formatter';
     use_ok 'YukiWiki::Model';
     use_ok 'YukiWiki::Model::Diff';
     use_ok 'YukiWiki::Model::Info';
