@@ -5,16 +5,10 @@ use parent qw(CGI::Application);
 use CGI::Application::Plugin::ConfigAuto qw(cfg);
 use CGI::Application::Plugin::Forward;
 use Carp;
-use Fcntl;
-use YukiWiki::DB;
 use YukiWiki::DiffText qw(difftext);
 use YukiWiki::PluginManager;
 use YukiWiki::RSS;
 use YukiWiki::Util qw(escape unescape encode decode get_now code_convert);
-
-# Check if the server can use 'AnyDBM_File' or not.
-# eval 'use AnyDBM_File';
-# my $error_AnyDBM_File = $@;
 
 our $VERSION = '2.1.3';
 
@@ -40,11 +34,6 @@ my $inline_plugin = qr{\&amp;(\w+)\((([^()]*(\([^()]*\))?)*)\)};
 
 my $embed_comment  = '[[#comment]]';
 my $embed_rcomment = '[[#rcomment]]';
-
-my $info_ConflictChecker = 'ConflictChecker';
-my $info_LastModified    = 'LastModified';
-my $info_IsFrozen        = 'IsFrozen';
-my $info_AdminPassword   = 'AdminPassword';
 
 sub setup {
     my $self = shift;
@@ -73,12 +62,10 @@ sub setup {
             $AdminChangePassword => 'adminchangepasswordform',
             $FrontPage => 'FrontPage',
         },
+        model => {},
     );
 
     $self->init_resource;
-    # &check_modifiers;
-    $self->open_db;
-    $self->init_InterWikiName;
     $self->init_plugin;
 
     $self->mode_param('mycmd');
@@ -172,9 +159,31 @@ sub before_load_tmpl {
     return;
 }
 
+sub model {
+    my $self  = shift;
+    my $class = join '::', 'YukiWiki::Model', shift;
+    my $model = $self->param('model');
+
+    unless ( exists $model->{$class} ) {
+        ( my $file = $class ) =~ s{::}{/}g;
+        require "$file.pm";
+        $model->{ $class } = $class->new( cfg => scalar $self->cfg );
+    }
+
+    $model->{ $class };
+}
+
+sub database { $_[0]->model('Page')->dbh }
+sub infobase { $_[0]->model('Info')->dbh }
+
+sub get_info { shift->model('Info')->get(@_) }
+sub set_info { shift->model('Info')->set(@_) }
+
+sub diffbase { $_[0]->model('Diff')->dbh }
+
 sub teardown {
     my $self = shift;
-    $self->close_db;
+    $self->delete('model');
 }
 
 sub do_read {
@@ -203,7 +212,7 @@ sub do_edit {
     else {
         $output .= $self->render_editform(
             $self->database->{ $page },
-            $self->get_info( $page, $info_ConflictChecker ),
+            $self->model('Info')->conflict_checker( $page ),
             admin => 0,
         );
     }
@@ -223,7 +232,7 @@ sub do_adminedit {
         $output .= $self->render_message( $self->resource->{passwordneeded} );
         $output .= $self->render_editform(
             $self->database->{$page},
-            $self->get_info( $page, $info_ConflictChecker ),
+            $self->model('Info')->conflict_checker( $page ),
             admin => 1,
         );
     }
@@ -265,13 +274,13 @@ sub do_adminchangepassword {
     my $myoldpassword  = $query->param('myoldpassword');
     my $mynewpassword  = $query->param('mynewpassword');
     my $mynewpassword2 = $query->param('mynewpassword2');
+    my $info           = $self->model('Info');
 
     if ( $mynewpassword ne $mynewpassword2 ) {
         croak $self->resource->{passwordmismatcherror};
     }
 
-    my $validpassword_crypt
-        = $self->get_info( $AdminSpecialPage, $info_AdminPassword );
+    my $validpassword_crypt = $info->admin_password( $AdminSpecialPage );
 
     if ( $validpassword_crypt ) {
         unless ( $self->valid_password($myoldpassword) ) {
@@ -292,7 +301,7 @@ EOD
         crypt( $mynewpassword, "$salt1$salt2" );
     };
 
-    $self->set_info( $AdminSpecialPage, $info_AdminPassword, $crypted );
+    $info->admin_password( $AdminSpecialPage => $crypted );
 
     return join q{}, (
         $self->render_header( $CompletedSuccessfully ),
@@ -303,16 +312,17 @@ EOD
 
 sub do_index {
     my $self   = shift;
+    my $page   = $self->model('Page');
     my $output = $self->render_header;
 
     my @pages;
-    for my $name ( sort keys %{$self->database} ) {
+    for my $name ( sort keys %{$page->dbh} ) {
         # print qq(<li>@{[&get_info($page, $info_IsFrozen)]}</li>);
         # print qq(<li>@{[0 + &is_frozen($page)]}</li>);
         push @pages, +{
             name        => $name,
             is_editable => $self->is_editable( $name ),
-            subjectline => $self->get_subjectline( $name ),
+            subjectline => $page->get_subjectline( $name ),
         };
     }
 
@@ -331,8 +341,9 @@ sub do_write {
     my $self     = shift;
     my $query    = $self->query;
     my $resource = $self->param('resource');
-    my $database = $self->param('database');
-    my $infobase = $self->param('infobase');
+    my $database = $self->database;
+    my $infobase = $self->infobase;
+    my $info     = $self->model('Info');
     my $mypage   = $self->param('mypage');
     my $mymsg    = $self->param('mymsg');
 
@@ -363,7 +374,7 @@ sub do_write {
         $self->send_mail_to_admin( $mypage, "Delete" );
 
         delete $database->{ $mypage };
-        delete $infobase->{ $mypage };
+        delete $info->dbh->{ $mypage };
 
         $self->update_recent_changes if $self->param('mytouch');
 
@@ -376,18 +387,14 @@ sub do_write {
 
     $database->{ $mypage } = $mymsg;
     $self->send_mail_to_admin( $mypage, "Modify" );
-    $self->set_info( $mypage, $info_ConflictChecker, '' . localtime );
+    $info->conflict_checker( $mypage => scalar localtime );
 
     if ( $self->param('mytouch') ) {
-        $self->set_info( $mypage, $info_LastModified, '' . localtime );
+        $info->last_modified( $mypage => scalar localtime );
         $self->update_recent_changes;
     }
 
-    $self->set_info(
-        $mypage,
-        $info_IsFrozen,
-        0 + $self->query->param('myfrozen'),
-    );
+    $info->is_frozen( $mypage => 0 + $self->query->param('myfrozen') );
 
     my $output = $self->render_header( $CompletedSuccessfully );
     $output .= $self->render_message( $resource->{saved} );
@@ -413,7 +420,7 @@ sub do_search {
     my $self     = shift;
     my $mymsg    = $self->param('mymsg');
     my $word     = YukiWiki::Util::escape( $mymsg );
-    my $database = $self->param('database');
+    my $database = $self->database;
 
     $self->param( mypage => $SearchPage );
 
@@ -1034,7 +1041,7 @@ sub make_link { # formatter
 sub update_recent_changes {
     my $self       = shift;
     my $mypage     = $self->param('mypage');
-    my $database   = $self->param('database');
+    my $database   = $self->database;
     my @oldupdates = split /\r?\n/, $database->{$RecentChanges};
 
     my $update = join(' ',
@@ -1083,7 +1090,7 @@ sub send_mail_to_admin {
 
     my $remote_addr   = $self->query->remote_addr;
     my $remote_host   = $self->query->remote_host;
-    my $database      = $self->param('database');
+    my $database      = $self->database;
     my $modifier_mail = $self->cfg('modifier_mail');
 
     my $message = <<"EOD";
@@ -1110,136 +1117,6 @@ EOD
     print MAIL $message;
     close(MAIL);
 }
-
-sub model {
-    my $self  = shift;
-    my $class = join '::', 'YukiWiki::Model', shift;
-    my $model = $self->{__MODEL} ||= {};
-
-    unless ( defined $model->{$class} ) {
-        ( my $file = $class ) =~ s{::}{/}g;
-        require "$file.pm";
-        $model->{ $class } = $class->new( cfg => scalar $self->cfg );
-    }
-
-    $model->{ $class };
-}
-
-sub open_db {
-    my $self            = shift;
-    my $modifier_dbtype = $self->cfg('modifier_dbtype');
-    my $dataname        = $self->cfg('dataname');
-    my $infoname        = $self->cfg('infoname');
-
-    my ( %database, %infobase );
-
-    if ( $modifier_dbtype eq 'dbmopen' ) {
-        dbmopen(%database, $dataname, 0666) or croak("(dbmopen) $dataname");
-        dbmopen(%infobase, $infoname, 0666) or croak("(dbmopen) $infoname");
-    }
-    elsif ( $modifier_dbtype eq 'AnyDBM_File' ) {
-        tie(%database, "AnyDBM_File", $dataname, O_RDWR|O_CREAT, 0666)
-            or croak("(tie AnyDBM_File) $dataname");
-        tie(%infobase, "AnyDBM_File", $infoname, O_RDWR|O_CREAT, 0666)
-            or croak("(tie AnyDBM_File) $infoname");
-    }
-    else {
-        $self->param(
-            database => $self->model('Page')->dbh,
-            infobase => $self->model('Info')->dbh,
-        );
-
-        return;
-
-        #tie(%database, "YukiWiki::DB", $dataname)
-        #    or croak("(tie YukiWiki::DB) $dataname");
-        #tie(%infobase, "YukiWiki::DB", $infoname)
-        #    or croak("(tie YukiWiki::DB) $infoname");
-    }
-
-    $self->param(
-        database => \%database,
-        infobase => \%infobase,
-    );
-
-    return;
-}
-
-sub close_db {
-    my $self            = shift;
-    my $modifier_dbtype = $self->cfg('modifier_dbtype');
-    my $database        = $self->param('database');
-    my $infobase        = $self->param('infobase');
-
-    if ( $modifier_dbtype eq 'dbmopen' ) {
-        dbmclose(%$database);
-        dbmclose(%$infobase);
-    }
-    elsif ( $modifier_dbtype eq 'AnyDBM_File' ) {
-        untie %$database;
-        untie %$infobase;
-    }
-    else {
-        untie %$database;
-        untie %$infobase;
-    }
-
-    $self->delete('database');
-    $self->delete('infobase');
-
-    return;
-}
-
-sub database { $_[0]->param('database') }
-sub infobase { $_[0]->param('infobase') }
-
-sub get_info { shift->model('Info')->get(@_) }
-sub set_info { shift->model('Info')->set(@_) }
-
-sub open_diff {
-    my $self            = shift;
-    my $modifier_dbtype = $self->cfg('modifier_dbtype');
-    my $diffname        = $self->cfg('diffname');
-
-    my %diffbase;
-
-    if ( $modifier_dbtype eq 'dbmopen' ) {
-        dbmopen(%diffbase, $diffname, 0666) or die "(dbmopen) $diffname";
-    }
-    elsif ( $modifier_dbtype eq 'AnyDBM_File' ) {
-        tie(%diffbase, "AnyDBM_File", $diffname, O_RDWR|O_CREAT, 0666) or die "(tie AnyDBM_File) $diffname";
-    }
-    else {
-        tie %diffbase, "YukiWiki::DB", $diffname
-            or croak "(tie YukiWiki::DB) $diffname";
-    }
-
-    $self->param( diffbase => \%diffbase );
-
-    return;
-}
-
-sub close_diff {
-    my $self            = shift;
-    my $modifier_dbtype = $self->cfg('modifier_dbtype');
-    my $diffbase        = $self->param('diffbase');
-
-    if ( $modifier_dbtype eq 'dbmopen' ) {
-        dbmclose(%$diffbase);
-    }
-    elsif ( $modifier_dbtype eq 'AnyDBM_File' ) {
-        untie(%$diffbase);
-    }
-    else {
-        untie(%$diffbase);
-    }
-
-    $self->delete('diffbase');
-
-    return;
-}
-
-sub diffbase { $_[0]->param('diffbase') }
 
 sub is_editable {
     my $self = shift;
@@ -1318,7 +1195,7 @@ sub conflict {
     my $rawmsg            = shift;
     my $myConflictChecker = $self->query->param('myConflictChecker');
 
-    if ($myConflictChecker eq $self->get_info($page, $info_ConflictChecker)) {
+    if ( $myConflictChecker eq $self->model('Info')->conflict_checker($page) ) {
         return 0;
     }
 
@@ -1342,23 +1219,7 @@ sub conflict {
     $output;
 }
 
-# [[YukiWiki http://www.hyuki.com/yukiwiki/wiki.cgi?euc($1)]]
-sub init_InterWikiName {
-    my $self    = shift;
-    my $content = $self->database->{$InterWikiName} || q{};
-
-    my %interwiki;
-    while ( $content =~ /\[\[(\S+) +(\S+)\]\]/g ) {
-        my ( $name, $url ) = ( $1, $2 );
-        $interwiki{ $name } = $url;
-    }
-
-    $self->param( interwiki => \%interwiki );
-
-    return;
-}
-
-sub interwiki { $_[0]->param('interwiki') }
+sub interwiki { $_[0]->model('Page')->interwiki }
 
 sub interwiki_convert {
     my ( $self, $type, $localname ) = @_;
@@ -1386,7 +1247,7 @@ sub interwiki_convert {
 
 sub frozen_reject {
     my $self         = shift;
-    my $isfrozen     = $self->get_info($self->param('mypage'), $info_IsFrozen);
+    my $isfrozen     = $self->model('Info')->is_frozen($self->param('mypage'));
     my $willbefrozen = $self->query->param('myfrozen');
     my $mypassword   = $self->query->param('mypassword');
 
@@ -1417,14 +1278,15 @@ sub length_reject {
 
 sub valid_password {
     my ( $self, $givenpassword ) = @_;
-    my $validpassword_crypt = $self->get_info($AdminSpecialPage, $info_AdminPassword);
+    my $validpassword_crypt
+        = $self->model('Info')->admin_password( $AdminSpecialPage );
     crypt( $givenpassword, $validpassword_crypt ) eq $validpassword_crypt;
 }
 
 sub is_frozen {
     my $self = shift;
     my $page = shift || $self->param('mypage');
-    $self->get_info( $page, $info_IsFrozen ) ? 1 : 0;
+    $self->model('Info')->is_frozen( $page );
 }
 
 sub embedded_to_html {
@@ -1434,7 +1296,7 @@ sub embedded_to_html {
     my $escapedmypage = YukiWiki::Util::escape( $mypage );
 
     if ( $embedded eq $embed_comment or $embedded eq $embed_rcomment ) {
-        my $conflictchecker = $self->get_info($mypage, $info_ConflictChecker);
+        my $conflictchecker = $self->model('Info')->conflict_checker( $mypage );
         my $resource        = $self->param('resource');
         my $tmpl            = $self->load_tmpl('commentform.html');
 
@@ -1451,22 +1313,7 @@ sub embedded_to_html {
     return $embedded;
 }
 
-sub is_exist_page {
-    my ( $self, $name ) = @_;
-
-    if ( $self->cfg('use_exists') ) {
-        return exists $self->database->{$name};
-    }
-    else {
-        return $self->database->{$name};
-    }
-}
-
-# sub check_modifiers {
-#     if ($error_AnyDBM_File and $modifier_dbtype eq 'AnyDBM_File') {
-#         &print_error($resource{anydbmfileerror});
-#     }
-# }
+sub is_exist_page { shift->model('Page')->is_exist_page(@_) }
 
 # Initialize plugins.
 sub init_plugin {
