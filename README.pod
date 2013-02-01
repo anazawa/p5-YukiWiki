@@ -1,6 +1,6 @@
 =head1 NAME
 
-  YukiWiki built upon CGI::Application
+YukiWiki clone built upon CGI::Application
 
 =head1 SYNOPSIS
 
@@ -16,19 +16,49 @@ YukiWiki can treat Japanese WikiNames (enclosed with [[ and ]]).
 YukiWiki provides 'InterWiki' feature, RDF Site Summary (RSS),
 and some embedded commands (such as [[#comment]] to add comments).
 
+=head2 FEATURE
+
+=over 4
+
+=item Controller -> CGI::Application
+
+=item View -> HTML::Template
+
+=item Model -> YukiWiki::DB (flat file database)
+
+=back
+
+=head2 INCOMPATIBLE CHANGES
+
+=over 4
+
+=item Page names are parsed from C<PATH_INFO>
+
+  wiki.cgi?FrontPage -> wiki.cgi/FrontPage
+
+=back
+
 =head1 DEPENDENCIES
 
+You have to install the following modules from CPAN:
+
+L<parent>,
 L<CGI::Application>,
 L<CGI::Application::Plugin::Forward>,
 L<CGI::Application::Plugin::AutoConfig>
 
-=head1 SEE ALSO
+=head1 HISTORY
 
-http://www.hyuki.com/yukiwiki/
+This application was forked from YukiWiki 2.1.3 to separate
+view and controller logic.
+
+=head1 AUTHOR
+
+Hiroshi Yuki <hyuki@hyuki.com> http://www.hyuki.com/yukiwiki/
 
 =head1 MODIFIER
 
-Ryo Anazawa
+Ryo Anazawa <anazawa@cpan.org> http://www7b.biglobe.ne.jp/anazawa/
 
 =head1 LICENSE
 

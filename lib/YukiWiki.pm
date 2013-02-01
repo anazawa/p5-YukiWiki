@@ -1,4 +1,4 @@
-package YukiWiki;
+package YukiWiki; # Controller
 use strict;
 use warnings;
 use parent qw(CGI::Application);
@@ -63,6 +63,7 @@ sub setup {
             $FrontPage => 'FrontPage',
         },
         model => {},
+        mypage => $FrontPage,
     );
 
     $self->init_resource;
@@ -105,18 +106,22 @@ sub cgiapp_prerun { # URL mapping
     my $self   = shift;
     my $query  = $self->query;
     my $mycmd  = $query->param('mycmd');
-    my $mypage = $query->param('mypage') || q{};
+    my $mypage = YukiWiki::Util::decode( $query->param('mypage') || q{} );
+
+    $mypage ||= do {
+        ( my $path_info = $query->path_info ) =~ s{^/}{};
+        YukiWiki::Util::decode( $path_info );
+    };
+
 
     if ( my $page_command = $self->page_command->{$mypage} ) {
-        $self->prerun_mode( $page_command );
-        $self->param( mypage => $mypage );
-    }
-    elsif ( $self->database->{$mypage} ) {
-        $self->prerun_mode('read') unless $mycmd;
-        $self->param( mypage => $mypage );
+        unless ( $mypage eq $FrontPage ) {
+            $self->prerun_mode( $page_command );
+            $self->param( mypage => $mypage );
+        }
     }
     elsif ( $mypage =~ /^($wiki_name)$/ ) {
-        $self->prerun_mode('edit') unless $mycmd;
+        $self->prerun_mode('read') unless $mycmd;
         $self->param( mypage => $1 );
     }
 
@@ -192,7 +197,7 @@ sub do_read {
 
     return join q{}, (
         $self->render_header,
-        $self->render_content( $self->database->{$mypage} ),
+        $self->render_content( $self->model('Page')->dbh->{$mypage} ),
         $self->render_footer,
     );
 }
@@ -231,7 +236,8 @@ sub do_adminedit {
     if ( $self->is_editable($page) ) {
         $output .= $self->render_message( $self->resource->{passwordneeded} );
         $output .= $self->render_editform(
-            $self->database->{$page},
+            #$self->database->{$page},
+            $self->model('Page')->dbh->{ $page },
             $self->model('Info')->conflict_checker( $page ),
             admin => 1,
         );
@@ -417,10 +423,10 @@ sub do_searchform {
 }
 
 sub do_search {
-    my $self     = shift;
-    my $mymsg    = $self->param('mymsg');
-    my $word     = YukiWiki::Util::escape( $mymsg );
-    my $database = $self->database;
+    my $self  = shift;
+    my $mymsg = $self->param('mymsg');
+    my $word  = YukiWiki::Util::escape( $mymsg );
+    my $page  = $self->model('Page');
 
     $self->param( mypage => $SearchPage );
 
@@ -429,15 +435,17 @@ sub do_search {
     $output .= $self->render_searchform( $word );
 
     my @pages;
-    for my $page ( sort keys %{$database} ) {
-        next if $page =~ /^$RecentChanges$/;
-        next if $database->{$page} !~ /\Q$mymsg\E/ and $page !~ /\Q$mymsg\E/;
+    while ( my ($name, $content) = each %{ $page->dbh } ) {
+        next if $name eq $RecentChanges;
+        next if $content !~ /\Q$mymsg\E/ and $name !~ /\Q$mymsg\E/;
 
         push @pages, +{
-            page        => $page,
-            subjectline => $self->get_subjectline( $page ),
+            name        => $name,
+            subjectline => $page->get_subjectline( $name ),
         };
     }
+
+    @pages = sort { $a->{name} cmp $b->{name} } @pages;
 
     if ( @pages ) {
         my $template = $self->load_tmpl;
@@ -500,7 +508,7 @@ sub do_comment {
     my $mypage  = $self->param('mypage');
     my $myname  = $self->param('myname');
     my $mymsg   = $self->param('mymsg');
-    my $content = $self->database->{ $mypage };
+    my $content = $self->model('Page')->dbh->{ $mypage };
     my $datestr = YukiWiki::Util::get_now();
     my $namestr = $myname ? " ''[[$myname]]'' : " : " ";
 
@@ -597,7 +605,7 @@ sub render_header {
         bodyclass            => 'normal',
         editable             => 0,
         admineditable        => 0,
-        subjectline          => $self->get_subjectline( $page ),
+        subjectline          => $self->model('Page')->get_subjectline($page),
         escapedpage          => YukiWiki::Util::escape( $page ),
         cookedpage           => YukiWiki::Util::encode( $page ),
         IndexPage            => $IndexPage,
@@ -1296,7 +1304,7 @@ sub embedded_to_html {
     my $escapedmypage = YukiWiki::Util::escape( $mypage );
 
     if ( $embedded eq $embed_comment or $embedded eq $embed_rcomment ) {
-        my $conflictchecker = $self->model('Info')->conflict_checker( $mypage );
+        my $conflictchecker = $self->model('Info')->conflict_checker($mypage);
         my $resource        = $self->param('resource');
         my $tmpl            = $self->load_tmpl('commentform.html');
 
